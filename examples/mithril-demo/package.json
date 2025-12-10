@@ -1,0 +1,22 @@
+{
+  "name": "mithril-demo",
+  "version": "1.0.0",
+  "description": "Mithril demo for ts-query",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "mithril": "^2.2.2",
+    "@ts-query/core": "^1.0.0",
+    "@ts-query/mithril": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/mithril": "^2.2.7",
+    "typescript": "^5.3.3",
+    "vite": "^7.2.4"
+  }
+}
+

@@ -1,0 +1,21 @@
+{
+  "name": "@ts-query/react",
+  "version": "1.0.0",
+  "description": "React adapter for ts-query",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "keywords": ["query", "react", "hooks"],
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "^18.0.0"
+  },
+  "dependencies": {
+    "@ts-query/core": "^1.0.0"
+  }
+}
+
