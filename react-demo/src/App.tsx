@@ -90,7 +90,7 @@ function App() {
               <input
                 type="checkbox"
                 checked={todo.completed}
-                onChange={() => {}}
+                readOnly
                 style={{ marginRight: '10px' }}
                 onClick={(e) => e.stopPropagation()}
               />
