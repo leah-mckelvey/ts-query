@@ -18,7 +18,6 @@ export interface QueryOptions<TData = unknown, TError = Error> {
     retry?: number;
     retryDelay?: number;
     enabled?: boolean;
-    refetchOnWindowFocus?: boolean;
     onSuccess?: (data: TData) => void;
     onError?: (error: TError) => void;
 }

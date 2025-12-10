@@ -3,7 +3,6 @@ import type { QueryOptions, QueryState, Subscriber } from './types';
 export class Query<TData = unknown, TError = Error> {
   private subscribers = new Set<Subscriber<QueryState<TData, TError>>>();
   private options: QueryOptions<TData, TError>;
-  private abortController: AbortController | null = null;
   private staleTimeout: ReturnType<typeof setTimeout> | null = null;
   private cacheTimeout: ReturnType<typeof setTimeout> | null = null;
   private retryCount = 0;
@@ -49,14 +48,8 @@ export class Query<TData = unknown, TError = Error> {
     this.notify();
   }
 
-  async fetch(): Promise<TData> {
-    // Cancel any in-flight request
-    if (this.abortController) {
-      this.abortController.abort();
-    }
-
-    this.abortController = new AbortController();
-    this.updateState({ status: 'loading', isFetching: true });
+	async fetch(): Promise<TData> {
+		this.updateState({ status: 'loading', isFetching: true });
 
     try {
       const data = await this.options.queryFn();
@@ -146,7 +139,6 @@ export class Query<TData = unknown, TError = Error> {
   destroy(): void {
     this.clearStaleTimeout();
     this.clearCacheTimeout();
-    this.abortController?.abort();
     this.subscribers.clear();
   }
 }

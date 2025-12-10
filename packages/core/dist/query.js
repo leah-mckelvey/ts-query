@@ -1,7 +1,6 @@
 export class Query {
     constructor(options) {
         this.subscribers = new Set();
-        this.abortController = null;
         this.staleTimeout = null;
         this.cacheTimeout = null;
         this.retryCount = 0;
@@ -41,11 +40,6 @@ export class Query {
         this.notify();
     }
     async fetch() {
-        // Cancel any in-flight request
-        if (this.abortController) {
-            this.abortController.abort();
-        }
-        this.abortController = new AbortController();
         this.updateState({ status: 'loading', isFetching: true });
         try {
             const data = await this.options.queryFn();
@@ -124,7 +118,6 @@ export class Query {
     destroy() {
         this.clearStaleTimeout();
         this.clearCacheTimeout();
-        this.abortController?.abort();
         this.subscribers.clear();
     }
 }
