@@ -1,0 +1,22 @@
+{
+  "name": "mithril-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Mithril demo showcasing networking and state management",
+  "dependencies": {
+    "mithril": "^2.3.8"
+  },
+  "devDependencies": {
+    "@types/mithril": "^2.2.7",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7"
+  }
+}
