@@ -2,7 +2,6 @@ import type { QueryOptions, QueryState, Subscriber } from './types';
 export declare class Query<TData = unknown, TError = Error> {
     private subscribers;
     private options;
-    private abortController;
     private staleTimeout;
     private cacheTimeout;
     private retryCount;

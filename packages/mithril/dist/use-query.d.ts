@@ -20,15 +20,4 @@ import type { QueryOptions, QueryState } from '@ts-query/core';
 export declare function createQueryComponent<TData = unknown, TError = Error>(options: QueryOptions<TData, TError>): m.Component<{
     children: (state: QueryState<TData, TError>) => m.Children;
 }>;
-/**
- * Legacy hook-style API for backward compatibility.
- *
- * WARNING: This should NOT be called in view functions!
- * It will create memory leaks because subscriptions are never cleaned up.
- *
- * Use createQueryComponent() instead for proper lifecycle management.
- *
- * @deprecated Use createQueryComponent() instead
- */
-export declare function useQuery<TData = unknown, TError = Error>(options: QueryOptions<TData, TError>): QueryState<TData, TError>;
 //# sourceMappingURL=use-query.d.ts.map
