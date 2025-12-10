@@ -1,6 +1,7 @@
 import m from 'mithril';
-import { createQueryComponent, createMutationComponent } from '@ts-query/mithril';
+import { createQueryComponent, createMutationComponent, createStoreComponent } from '@ts-query/mithril';
 import type { QueryState } from '@ts-query/core';
+import { createStore } from '@ts-query/core';
 
 // Mock API functions
 const fetchUser = async (userId: number): Promise<{ id: number; name: string; email: string }> => {
@@ -44,6 +45,21 @@ const CreatePostMutationComponent = createMutationComponent({
     postBody = '';
   },
 });
+
+// Simple global store for manual testing
+interface CounterState {
+  count: number;
+  increment: () => void;
+  reset: () => void;
+}
+
+const counterStore = createStore<CounterState>((set) => ({
+  count: 0,
+  increment: () => set((state) => ({ count: state.count + 1 })),
+  reset: () => set({ count: 0 }),
+}));
+
+const CounterStoreComponent = createStoreComponent(counterStore);
 
 const App: m.Component = {
   view: () => {
@@ -140,6 +156,20 @@ const App: m.Component = {
           ],
         }),
       ]),
+
+	      // Store Demo - using store + createStoreComponent
+	      m('div.section', [
+	        m('h2', 'Store Demo (createStoreComponent)'),
+	        m(CounterStoreComponent, {
+	          children: (state: CounterState) => [
+	            m('div', [
+	              m('p', [m('strong', 'Count: '), state.count]),
+	              m('button', { onclick: state.increment }, 'Increment'),
+	              m('button', { onclick: state.reset }, 'Reset'),
+	            ]),
+	          ],
+	        }),
+	      ]),
     ]);
   },
 };
