@@ -48,8 +48,8 @@ export class Query<TData = unknown, TError = Error> {
     this.notify();
   }
 
-	async fetch(): Promise<TData> {
-		this.updateState({ status: 'loading', isFetching: true });
+  async fetch(): Promise<TData> {
+    this.updateState({ status: 'loading', isFetching: true });
 
     try {
       const data = await this.options.queryFn();
