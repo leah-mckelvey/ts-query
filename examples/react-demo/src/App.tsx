@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useQuery, useMutation } from '@ts-query/react';
+import { createStore } from '@ts-query/core';
+import { useQuery, useMutation, useStore } from '@ts-query/react';
 import './App.css';
 
 // Mock API functions
@@ -22,6 +23,36 @@ const createPost = async (data: { title: string; body: string }): Promise<{ id: 
     ...data,
   };
 };
+
+// Simple global store for manual testing
+interface CounterState {
+  count: number;
+  increment: () => void;
+  reset: () => void;
+}
+
+const counterStore = createStore<CounterState>((set) => ({
+  count: 0,
+  increment: () => set((state) => ({ count: state.count + 1 })),
+  reset: () => set({ count: 0 }),
+}));
+
+function StoreDemo() {
+  const { count, increment, reset } = useStore(counterStore);
+
+  return (
+    <div className="section">
+      <h2>Store Demo (useStore)</h2>
+      <div>
+        <p>
+          <strong>Count:</strong> {count}
+        </p>
+        <button onClick={increment}>Increment</button>
+        <button onClick={reset}>Reset</button>
+      </div>
+    </div>
+  );
+}
 
 function App() {
   const [userId, setUserId] = useState(1);
@@ -127,6 +158,9 @@ function App() {
           </div>
         )}
       </div>
+
+	      {/* Store Demo */}
+	      <StoreDemo />
     </div>
   );
 }
