@@ -12,7 +12,7 @@
   "keywords": ["query", "react", "hooks"],
   "license": "MIT",
   "peerDependencies": {
-    "react": "^18.0.0"
+    "react": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {
     "@ts-query/core": "^1.0.0"
