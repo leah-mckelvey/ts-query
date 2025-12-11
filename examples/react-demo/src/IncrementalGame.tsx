@@ -69,7 +69,7 @@ export const IncrementalGame = () => {
 	            style={{ minWidth: '240px', fontSize: '1.25rem' }}
 	            onClick={click}
 	          >
-	            Click for {cookiesPerClick} cookie
+	            Click for {cookiesPerClick} cookie{cookiesPerClick !== 1 ? 's' : ''}
 	          </Button>
 	        </Box>
 
