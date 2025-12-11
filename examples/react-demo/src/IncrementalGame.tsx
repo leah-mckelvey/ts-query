@@ -1,11 +1,7 @@
 import { useStore } from '@ts-query/react';
 import { Box, Button, Heading, Stack, Text } from '@ts-query/ui-react';
-import {
-	gameStore,
-	BUILDING_COST_MULTIPLIER,
-	UPGRADES,
-	ACHIEVEMENTS,
-} from './gameStore';
+import { gameStore, BUILDING_COST_MULTIPLIER } from './gameStore';
+import { UPGRADES, ACHIEVEMENTS } from './gameContent';
 
 const formatNumber = (value: number): string => {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
