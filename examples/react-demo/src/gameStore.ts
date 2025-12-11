@@ -283,7 +283,7 @@ export const gameStore = createStore<GameStoreState>(() => {
           typeof def.multiplier === 'number'
         ) {
           buildings = state.buildings.map((b) =>
-            b.id === def.buildingId ? { ...b, cps: b.cps * def.multiplier! } : b,
+            b.id === def.buildingId ? { ...b, cps: b.cps * def.multiplier } : b,
           );
         }
 
