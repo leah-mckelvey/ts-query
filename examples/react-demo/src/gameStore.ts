@@ -275,17 +275,16 @@ export const gameStore = createStore<GameStoreState>(() => {
 
         if (def.kind === 'click-add' && typeof def.amount === 'number') {
           cookiesPerClick += def.amount;
-        } else if (def.kind === 'click-mult' && typeof def.multiplier === 'number') {
-          cookiesPerClick *= def.multiplier;
-        } else if (
-          def.kind === 'building-mult' &&
-          def.buildingId &&
-          typeof def.multiplier === 'number'
-        ) {
-          buildings = state.buildings.map((b) =>
-            b.id === def.buildingId ? { ...b, cps: b.cps * def.multiplier } : b,
-          );
-        }
+	    } else if (def.kind === 'click-mult' && typeof def.multiplier === 'number') {
+	      cookiesPerClick *= def.multiplier;
+	    } else if (def.kind === 'building-mult' && def.buildingId) {
+	      const multiplier = def.multiplier;
+	      if (typeof multiplier !== 'number') return {};
+
+	      buildings = state.buildings.map((b) =>
+	        b.id === def.buildingId ? { ...b, cps: b.cps * multiplier } : b,
+	      );
+	    }
 
         const nowUpgrade = Date.now();
         const snapshot: GameState = {
