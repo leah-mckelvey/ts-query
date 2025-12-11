@@ -161,7 +161,7 @@ function computeUnlockedAchievements(state: GameState): string[] {
 
 export const gameStore = createStore<GameStoreState>(() => {
 	  const persisted = loadPersistedState();
-	  const now = typeof window === 'undefined' ? Date.now() : Date.now();
+	  const now = Date.now();
 
 	  let baseState: GameState = persisted ?? { ...defaultGameState, lastUpdate: now };
 
