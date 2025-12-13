@@ -78,65 +78,65 @@ function computeTotalCps(state: Pick<GameState, 'buildings'>): number {
 function loadPersistedState(): GameState | null {
   if (typeof window === 'undefined') return null;
 
-	  try {
-	    const raw = window.localStorage.getItem(STORAGE_KEY);
-	    if (!raw) return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
 
-	    const parsed = JSON.parse(raw) as Partial<GameState>;
-	    if (typeof parsed !== 'object' || parsed === null) return null;
+    const parsed = JSON.parse(raw) as Partial<GameState>;
+    if (typeof parsed !== 'object' || parsed === null) return null;
 
-	    const persistedBuildings = Array.isArray((parsed as any).buildings)
-	      ? ((parsed as any).buildings as Partial<Building>[])
-	      : null;
+    const persistedBuildings = Array.isArray((parsed as any).buildings)
+      ? ((parsed as any).buildings as Partial<Building>[])
+      : null;
 
-	    const mergedBuildings: Building[] = DEFAULT_BUILDINGS.map((def) => {
-	      const persisted = persistedBuildings?.find((b) => b && b.id === def.id);
-	      return {
-	        ...def,
-	        count:
-	          persisted && typeof persisted.count === 'number'
-	            ? persisted.count
-	            : def.count,
-	        cps:
-	          persisted && typeof persisted.cps === 'number'
-	            ? persisted.cps
-	            : def.cps,
-	      };
-	    });
+    const mergedBuildings: Building[] = DEFAULT_BUILDINGS.map((def) => {
+      const persisted = persistedBuildings?.find((b) => b && b.id === def.id);
+      return {
+        ...def,
+        count:
+          persisted && typeof persisted.count === 'number'
+            ? persisted.count
+            : def.count,
+        cps:
+          persisted && typeof persisted.cps === 'number'
+            ? persisted.cps
+            : def.cps,
+      };
+    });
 
-	    return {
-	      ...defaultGameState,
-	      ...parsed,
-	      buildings: mergedBuildings,
-	      totalCookies:
-	        typeof parsed.totalCookies === 'number'
-	          ? parsed.totalCookies
-	          : typeof parsed.cookies === 'number'
-	            ? parsed.cookies
-	            : defaultGameState.totalCookies,
-	      purchasedUpgrades: Array.isArray((parsed as any).purchasedUpgrades)
-	        ? (parsed as any).purchasedUpgrades
-	        : [],
-	      unlockedAchievements: Array.isArray((parsed as any).unlockedAchievements)
-	        ? (parsed as any).unlockedAchievements
-	        : [],
-	      goldenCookieVisible:
-	        typeof (parsed as any).goldenCookieVisible === 'boolean'
-	          ? (parsed as any).goldenCookieVisible
-	          : false,
-	      goldenCookieExpiresAt:
-	        typeof (parsed as any).goldenCookieExpiresAt === 'number'
-	          ? (parsed as any).goldenCookieExpiresAt
-	          : null,
-	      goldenCookiesClicked:
-	        typeof (parsed as any).goldenCookiesClicked === 'number'
-	          ? (parsed as any).goldenCookiesClicked
-	          : 0,
-	      lastUpdate: typeof parsed.lastUpdate === 'number' ? parsed.lastUpdate : 0,
-	    };
-	  } catch {
-	    return null;
-	  }
+    return {
+      ...defaultGameState,
+      ...parsed,
+      buildings: mergedBuildings,
+      totalCookies:
+        typeof parsed.totalCookies === 'number'
+          ? parsed.totalCookies
+          : typeof parsed.cookies === 'number'
+            ? parsed.cookies
+            : defaultGameState.totalCookies,
+      purchasedUpgrades: Array.isArray((parsed as any).purchasedUpgrades)
+        ? (parsed as any).purchasedUpgrades
+        : [],
+      unlockedAchievements: Array.isArray((parsed as any).unlockedAchievements)
+        ? (parsed as any).unlockedAchievements
+        : [],
+      goldenCookieVisible:
+        typeof (parsed as any).goldenCookieVisible === 'boolean'
+          ? (parsed as any).goldenCookieVisible
+          : false,
+      goldenCookieExpiresAt:
+        typeof (parsed as any).goldenCookieExpiresAt === 'number'
+          ? (parsed as any).goldenCookieExpiresAt
+          : null,
+      goldenCookiesClicked:
+        typeof (parsed as any).goldenCookiesClicked === 'number'
+          ? (parsed as any).goldenCookiesClicked
+          : 0,
+      lastUpdate: typeof parsed.lastUpdate === 'number' ? parsed.lastUpdate : 0,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function persistState(state: GameState): void {
