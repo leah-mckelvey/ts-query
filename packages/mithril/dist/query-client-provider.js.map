@@ -1,1 +1,0 @@
-{"version":3,"file":"query-client-provider.js","sourceRoot":"","sources":["../src/query-client-provider.ts"],"names":[],"mappings":"AAEA,IAAI,iBAA0C,CAAC;AAE/C,MAAM,UAAU,cAAc,CAAC,MAAmB;IAChD,iBAAiB,GAAG,MAAM,CAAC;AAC7B,CAAC;AAED,MAAM,UAAU,cAAc;IAC5B,IAAI,CAAC,iBAAiB,EAAE,CAAC;QACvB,MAAM,IAAI,KAAK,CAAC,kEAAkE,CAAC,CAAC;IACtF,CAAC;IACD,OAAO,iBAAiB,CAAC;AAC3B,CAAC"}
