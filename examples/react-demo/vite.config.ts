@@ -7,13 +7,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // https://vite.dev/config/
 export default defineConfig({
-	plugins: [react()],
-	resolve: {
-		alias: {
-			'@ts-query/ui-react': path.resolve(
-				__dirname,
-				'../../packages/ui-react/src',
-			),
-		},
-	},
+  plugins: [react()],
+  resolve: {
+    alias: {
+      '@ts-query/ui-react': path.resolve(
+        __dirname,
+        '../../packages/ui-react/src',
+      ),
+    },
+  },
 });

@@ -3,17 +3,17 @@ import type { QueryOptions, QueryState } from '@ts-query/core';
 import { useQueryClient } from './context';
 
 export function useQuery<TData = unknown, TError = Error>(
-  options: QueryOptions<TData, TError>
+  options: QueryOptions<TData, TError>,
 ): QueryState<TData, TError> {
   const client = useQueryClient();
   const query = client.getQuery(options);
-  
+
   const [state, setState] = useState<QueryState<TData, TError>>(query.state);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
     isMountedRef.current = true;
-    
+
     // Subscribe to query updates
     const unsubscribe = query.subscribe((newState) => {
       if (isMountedRef.current) {
@@ -41,4 +41,3 @@ export function useQuery<TData = unknown, TError = Error>(
 
   return state;
 }
-

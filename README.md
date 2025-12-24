@@ -74,7 +74,9 @@ function Users() {
 
   return (
     <ul>
-      {data.map(user => <li key={user.id}>{user.name}</li>)}
+      {data.map((user) => (
+        <li key={user.id}>{user.name}</li>
+      ))}
     </ul>
   );
 }
@@ -107,9 +109,10 @@ const Users: m.Component = {
         if (isLoading) return m('div', 'Loading...');
         if (isError) return m('div', `Error: ${error.message}`);
 
-        return m('ul', data.map(user =>
-          m('li', { key: user.id }, user.name)
-        ));
+        return m(
+          'ul',
+          data.map((user) => m('li', { key: user.id }, user.name)),
+        );
       },
     }),
 };
@@ -142,23 +145,23 @@ Fetch and cache data with automatic state management.
 const query = useQuery({
   queryKey: ['user', userId],
   queryFn: () => fetchUser(userId),
-  staleTime: 5000,           // Time before data is considered stale (ms)
-  cacheTime: 300000,         // Time before unused data is garbage collected (ms)
-  retry: 3,                  // Number of retry attempts on failure
-  retryDelay: 1000,          // Delay between retries (ms)
-  enabled: true,             // Whether query should run automatically
-  onSuccess: (data) => {},   // Callback on successful fetch
-  onError: (error) => {},    // Callback on error
+  staleTime: 5000, // Time before data is considered stale (ms)
+  cacheTime: 300000, // Time before unused data is garbage collected (ms)
+  retry: 3, // Number of retry attempts on failure
+  retryDelay: 1000, // Delay between retries (ms)
+  enabled: true, // Whether query should run automatically
+  onSuccess: (data) => {}, // Callback on successful fetch
+  onError: (error) => {}, // Callback on error
 });
 
 // Query state
-query.status;      // 'idle' | 'loading' | 'success' | 'error'
-query.data;        // The fetched data
-query.error;       // Error object if failed
-query.isLoading;   // Boolean loading state
-query.isSuccess;   // Boolean success state
-query.isError;     // Boolean error state
-query.isFetching;  // Boolean fetching state
+query.status; // 'idle' | 'loading' | 'success' | 'error'
+query.data; // The fetched data
+query.error; // Error object if failed
+query.isLoading; // Boolean loading state
+query.isSuccess; // Boolean success state
+query.isError; // Boolean error state
+query.isFetching; // Boolean fetching state
 ```
 
 ### useMutation
@@ -180,12 +183,12 @@ const mutation = useMutation({
 await mutation.mutate({ name: 'John' });
 
 // Mutation state
-mutation.state.status;     // 'idle' | 'loading' | 'success' | 'error'
-mutation.state.data;       // The mutation result
-mutation.state.error;      // Error object if failed
-mutation.state.isLoading;  // Boolean loading state
-mutation.state.isSuccess;  // Boolean success state
-mutation.state.isError;    // Boolean error state
+mutation.state.status; // 'idle' | 'loading' | 'success' | 'error'
+mutation.state.data; // The mutation result
+mutation.state.error; // Error object if failed
+mutation.state.isLoading; // Boolean loading state
+mutation.state.isSuccess; // Boolean success state
+mutation.state.isError; // Boolean error state
 
 // Reset mutation state
 mutation.reset();
@@ -238,6 +241,7 @@ This project demonstrates how to build framework-agnostic infrastructure that ca
 4. **Best Practices** - Follows modern JavaScript/TypeScript patterns and conventions
 
 This approach allows teams to:
+
 - Share logic across different frameworks
 - Migrate between frameworks without rewriting business logic
 - Maintain consistency in data fetching patterns
@@ -247,16 +251,16 @@ This approach allows teams to:
 
 ts-query is inspired by TanStack Query but simplified for educational purposes:
 
-| Feature | ts-query | TanStack Query |
-|---------|----------|----------------|
-| Framework Support | React, Mithril | React, Vue, Solid, Svelte, Angular |
-| Bundle Size | ~5KB | ~15KB |
-| Query Invalidation | ✅ | ✅ |
-| Automatic Refetching (retries) | ✅ | ✅ |
-| Optimistic Updates | ❌ | ✅ |
-| Infinite Queries | ❌ | ✅ |
-| Devtools | ❌ | ✅ |
-| SSR Support | ❌ | ✅ |
+| Feature                        | ts-query       | TanStack Query                     |
+| ------------------------------ | -------------- | ---------------------------------- |
+| Framework Support              | React, Mithril | React, Vue, Solid, Svelte, Angular |
+| Bundle Size                    | ~5KB           | ~15KB                              |
+| Query Invalidation             | ✅             | ✅                                 |
+| Automatic Refetching (retries) | ✅             | ✅                                 |
+| Optimistic Updates             | ❌             | ✅                                 |
+| Infinite Queries               | ❌             | ✅                                 |
+| Devtools                       | ❌             | ✅                                 |
+| SSR Support                    | ❌             | ✅                                 |
 
 ## Future Work
 

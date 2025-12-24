@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Store } from '@ts-query/core';
 
 export function useStore<TState, TSelected = TState>(
   store: Store<TState>,
   selector?: (state: TState) => TSelected,
-  equalityFn: (a: TSelected, b: TSelected) => boolean = Object.is
+  equalityFn: (a: TSelected, b: TSelected) => boolean = Object.is,
 ): TSelected {
-  const select = selector ?? ((state: TState) => state as unknown as TSelected);
+  const select = useMemo(
+    () => selector ?? ((state: TState) => state as unknown as TSelected),
+    [selector],
+  );
 
   const [selectedState, setSelectedState] = useState<TSelected>(() =>
-    select(store.getState())
+    select(store.getState()),
   );
 
   useEffect(() => {

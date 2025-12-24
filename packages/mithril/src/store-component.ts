@@ -4,7 +4,7 @@ import type { Store } from '@ts-query/core';
 export function createStoreComponent<TState, TSelected = TState>(
   store: Store<TState>,
   selector?: (state: TState) => TSelected,
-  equalityFn: (a: TSelected, b: TSelected) => boolean = Object.is
+  equalityFn: (a: TSelected, b: TSelected) => boolean = Object.is,
 ): m.Component<{ children: (selected: TSelected) => m.Children }> {
   const select = selector ?? ((state: TState) => state as unknown as TSelected);
 

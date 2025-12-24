@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createStore, type Store } from '../store';
+import { createStore } from '../store';
 
 interface CounterState {
   count: number;
@@ -14,7 +14,10 @@ describe('createStore', () => {
   });
 
   it('should update state with partial value', () => {
-    const store = createStore<CounterState>(() => ({ count: 0, label: 'initial' }));
+    const store = createStore<CounterState>(() => ({
+      count: 0,
+      label: 'initial',
+    }));
 
     store.setState({ count: 1 });
 
@@ -30,7 +33,10 @@ describe('createStore', () => {
   });
 
   it('should replace state when replace flag is true', () => {
-    const store = createStore<CounterState>(() => ({ count: 0, label: 'initial' }));
+    const store = createStore<CounterState>(() => ({
+      count: 0,
+      label: 'initial',
+    }));
 
     store.setState({ count: 5 }, true);
 
@@ -46,10 +52,7 @@ describe('createStore', () => {
     store.setState({ count: 1 });
 
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith(
-      { count: 1 },
-      { count: 0 }
-    );
+    expect(listener).toHaveBeenCalledWith({ count: 1 }, { count: 0 });
   });
 
   it('should unsubscribe correctly', () => {

@@ -4,8 +4,7 @@ export type ButtonVariant = 'solid' | 'outline' | 'ghost';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 export type ButtonColorScheme = 'blue' | 'gray' | 'red' | 'green';
 
-export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   colorScheme?: ButtonColorScheme;
@@ -116,4 +115,3 @@ export const Button: React.FC<ButtonProps> = ({
 
   return <button style={{ ...variantStyles, ...style }} {...rest} />;
 };
-

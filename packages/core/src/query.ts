@@ -22,7 +22,7 @@ export class Query<TData = unknown, TError = Error> {
 
   constructor(
     options: QueryOptions<TData, TError>,
-    onGarbageCollection?: () => void
+    onGarbageCollection?: () => void,
   ) {
     this.options = options;
     this.onGarbageCollection = onGarbageCollection;
@@ -104,7 +104,8 @@ export class Query<TData = unknown, TError = Error> {
       if (this.retryCount < maxRetries) {
         this.retryCount++;
         const delay =
-          this.options.retryDelay ?? Math.min(1000 * 2 ** this.retryCount, 30000);
+          this.options.retryDelay ??
+          Math.min(1000 * 2 ** this.retryCount, 30000);
         await new Promise((resolve) => setTimeout(resolve, delay));
         return this.executeFetch();
       }
@@ -171,4 +172,3 @@ export class Query<TData = unknown, TError = Error> {
     this.onGarbageCollection = undefined;
   }
 }
-

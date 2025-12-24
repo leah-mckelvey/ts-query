@@ -2,7 +2,11 @@ import m from 'mithril';
 import type { MutationOptions, MutationState, Mutation } from '@ts-query/core';
 import { getQueryClient } from './query-client-provider';
 
-export interface UseMutationResult<TData = unknown, TVariables = unknown, TError = Error> {
+export interface UseMutationResult<
+  TData = unknown,
+  TVariables = unknown,
+  TError = Error,
+> {
   mutate: (variables: TVariables) => Promise<TData>;
   mutateAsync: (variables: TVariables) => Promise<TData>;
   reset: () => void;
@@ -11,7 +15,7 @@ export interface UseMutationResult<TData = unknown, TVariables = unknown, TError
 
 // WeakMap to store cleanup functions for mutations
 // This avoids memory leaks and type safety issues with attaching to objects
-const cleanupMap = new WeakMap<Mutation<any, any, any>, () => void>();
+const cleanupMap = new WeakMap<Mutation<unknown, unknown, unknown>, () => void>();
 
 /**
  * Creates a Mithril component that manages a mutation with proper lifecycle.
@@ -32,9 +36,17 @@ const cleanupMap = new WeakMap<Mutation<any, any, any>, () => void>();
  *   }, 'Create Post')
  * })
  */
-export function createMutationComponent<TData = unknown, TVariables = unknown, TError = Error>(
-  options: MutationOptions<TData, TVariables, TError>
-): m.Component<{ children: (result: UseMutationResult<TData, TVariables, TError>) => m.Children }> {
+export function createMutationComponent<
+  TData = unknown,
+  TVariables = unknown,
+  TError = Error,
+>(
+  options: MutationOptions<TData, TVariables, TError>,
+): m.Component<{
+  children: (
+    result: UseMutationResult<TData, TVariables, TError>,
+  ) => m.Children;
+}> {
   let mutation: Mutation<TData, TVariables, TError>;
 
   return {
@@ -84,8 +96,12 @@ export function createMutationComponent<TData = unknown, TVariables = unknown, T
  *
  * @deprecated Use createMutationComponent() instead
  */
-export function useMutation<TData = unknown, TVariables = unknown, TError = Error>(
-  options: MutationOptions<TData, TVariables, TError>
+export function useMutation<
+  TData = unknown,
+  TVariables = unknown,
+  TError = Error,
+>(
+  options: MutationOptions<TData, TVariables, TError>,
 ): UseMutationResult<TData, TVariables, TError> {
   const client = getQueryClient();
   const mutation = client.createMutation(options);
@@ -113,4 +129,3 @@ export function useMutation<TData = unknown, TVariables = unknown, TError = Erro
     state: mutation.state,
   };
 }
-

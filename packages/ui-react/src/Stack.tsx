@@ -40,9 +40,8 @@ export const Stack: React.FC<StackProps> = ({
   }
 
   return (
-    <Box as="div" style={resolvedStyle} {...(rest as any)}>
+    <Box as="div" style={resolvedStyle} {...rest}>
       {children}
     </Box>
   );
 };
-

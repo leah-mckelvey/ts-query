@@ -8,4 +8,3 @@ const queryClient = new QueryClient();
 setQueryClient(queryClient);
 
 m.mount(document.getElementById('app')!, App);
-

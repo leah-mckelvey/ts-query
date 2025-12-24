@@ -9,7 +9,10 @@
     "build": "tsc",
     "dev": "tsc --watch"
   },
-  "keywords": ["query", "cache", "async"],
+  "keywords": [
+    "query",
+    "cache",
+    "async"
+  ],
   "license": "MIT"
 }
-

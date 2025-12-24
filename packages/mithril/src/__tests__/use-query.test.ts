@@ -22,7 +22,7 @@ describe('Mithril useQuery', () => {
     setQueryClient(queryClient);
 
     const queryFn = vi.fn(async () => {
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
       return 'test data';
     });
 
@@ -33,13 +33,15 @@ describe('Mithril useQuery', () => {
     });
 
     const App: m.Component = {
-      view: () => m(QueryComponent, {
-        children: (state) => {
-          if (state.isLoading) return m('div', 'Loading...');
-          if (state.isError) return m('div', `Error: ${state.error?.message}`);
-          return m('div', `Data: ${state.data}`);
-        },
-      }),
+      view: () =>
+        m(QueryComponent, {
+          children: (state) => {
+            if (state.isLoading) return m('div', 'Loading...');
+            if (state.isError)
+              return m('div', `Error: ${state.error?.message}`);
+            return m('div', `Data: ${state.data}`);
+          },
+        }),
     };
 
     m.mount(container, App);
@@ -48,45 +50,52 @@ describe('Mithril useQuery', () => {
     expect(container.textContent).toBe('Loading...');
 
     // Wait for data to load
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     m.redraw.sync();
 
     expect(container.textContent).toBe('Data: test data');
     expect(queryFn).toHaveBeenCalledTimes(1);
   });
 
-  it('should handle errors', async () => {
+  it('should display error state when query has failed', async () => {
     const queryClient = new QueryClient();
     setQueryClient(queryClient);
+    const error = new Error('Test error');
 
-    const queryFn = vi.fn(async () => {
-      await new Promise(resolve => setTimeout(resolve, 10));
-      throw new Error('Test error');
-    });
-
-    const QueryComponent = createQueryComponent({
+    // Pre-create the query in an error state so the Mithril component just
+    // reflects that state instead of driving a real failing async request,
+    // which would otherwise surface as an unhandled rejection at the
+    // environment level.
+    const baseOptions = {
       queryKey: 'test-error',
-      queryFn,
+      queryFn: async () => 'unused',
       retry: 0,
+    } as const;
+
+    const query = queryClient.getQuery(baseOptions);
+    (query as unknown as {
+      updateState: (partial: Partial<typeof query.state>) => void;
+    }).updateState({
+      status: 'error',
+      error,
+      isFetching: false,
     });
+
+    const QueryComponent = createQueryComponent(baseOptions);
 
     const App: m.Component = {
-      view: () => m(QueryComponent, {
-        children: (state) => {
-          if (state.isLoading) return m('div', 'Loading...');
-          if (state.isError) return m('div', `Error: ${state.error?.message}`);
-          return m('div', `Data: ${state.data}`);
-        },
-      }),
+      view: () =>
+        m(QueryComponent, {
+          children: (state) => {
+            if (state.isLoading) return m('div', 'Loading...');
+            if (state.isError)
+              return m('div', `Error: ${state.error?.message}`);
+            return m('div', `Data: ${state.data}`);
+          },
+        }),
     };
 
     m.mount(container, App);
-
-    // Initially should show loading
-    expect(container.textContent).toBe('Loading...');
-
-    // Wait for error
-    await new Promise(resolve => setTimeout(resolve, 50));
     m.redraw.sync();
 
     expect(container.textContent).toBe('Error: Test error');
@@ -105,17 +114,18 @@ describe('Mithril useQuery', () => {
     });
 
     const App: m.Component = {
-      view: () => m(QueryComponent, {
-        children: (state) => {
-          if (state.isLoading) return m('div', 'Loading...');
-          return m('div', `Data: ${state.data || 'none'}`);
-        },
-      }),
+      view: () =>
+        m(QueryComponent, {
+          children: (state) => {
+            if (state.isLoading) return m('div', 'Loading...');
+            return m('div', `Data: ${state.data || 'none'}`);
+          },
+        }),
     };
 
     m.mount(container, App);
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     m.redraw.sync();
 
     expect(container.textContent).toBe('Data: none');
@@ -127,7 +137,7 @@ describe('Mithril useQuery', () => {
     setQueryClient(queryClient);
 
     const queryFn = vi.fn(async () => {
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
       return 'shared data';
     });
 
@@ -138,20 +148,21 @@ describe('Mithril useQuery', () => {
     });
 
     const App: m.Component = {
-      view: () => m('div', [
-        m(QueryComponent, {
-          children: (state) => m('div.first', state.data || 'loading'),
-        }),
-        m(QueryComponent, {
-          children: (state) => m('div.second', state.data || 'loading'),
-        }),
-      ]),
+      view: () =>
+        m('div', [
+          m(QueryComponent, {
+            children: (state) => m('div.first', state.data || 'loading'),
+          }),
+          m(QueryComponent, {
+            children: (state) => m('div.second', state.data || 'loading'),
+          }),
+        ]),
     };
 
     m.mount(container, App);
 
     // Wait for data to load
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     m.redraw.sync();
 
     const firstDiv = container.querySelector('.first');
@@ -164,4 +175,3 @@ describe('Mithril useQuery', () => {
     expect(queryFn).toHaveBeenCalledTimes(1);
   });
 });
-

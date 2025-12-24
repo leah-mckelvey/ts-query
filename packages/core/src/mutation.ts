@@ -84,4 +84,3 @@ export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
     this.notify();
   }
 }
-

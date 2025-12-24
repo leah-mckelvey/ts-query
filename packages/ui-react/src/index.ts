@@ -9,4 +9,3 @@ export type { StackProps, StackDirection } from './Stack';
 
 export { Text, Heading } from './Text';
 export type { TextProps, HeadingProps } from './Text';
-

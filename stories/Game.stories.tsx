@@ -28,10 +28,7 @@ export const GameScreen = () => {
     { id: 'farm', name: 'Farm', baseCost: 1100, count: 0, cps: 8 },
   ]);
 
-  const totalCps = buildings.reduce(
-    (sum, b) => sum + b.cps * b.count,
-    0,
-  );
+  const totalCps = buildings.reduce((sum, b) => sum + b.cps * b.count, 0);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -52,9 +49,7 @@ export const GameScreen = () => {
     setCookies((c) => c - currentCost);
     setBuildings((prev) =>
       prev.map((b) =>
-        b.id === building.id
-          ? { ...b, count: b.count + 1 }
-          : b,
+        b.id === building.id ? { ...b, count: b.count + 1 } : b,
       ),
     );
   };
@@ -76,9 +71,7 @@ export const GameScreen = () => {
 
           <Box mt={4} mb={4}>
             <Heading level={2}>Cookies: {formatNumber(cookies)}</Heading>
-            <Text color="#a0aec0">
-              {totalCps.toFixed(1)} cookies / second
-            </Text>
+            <Text color="#a0aec0">{totalCps.toFixed(1)} cookies / second</Text>
           </Box>
 
           <Button
@@ -114,7 +107,11 @@ export const GameScreen = () => {
                   rounded={6}
                   style={{ opacity: affordable ? 1 : 0.6 }}
                 >
-                  <Stack direction="row" gap={2} style={{ alignItems: 'center' }}>
+                  <Stack
+                    direction="row"
+                    gap={2}
+                    style={{ alignItems: 'center' }}
+                  >
                     <Box flex={1 as any}>
                       <Text fontWeight={600}>{b.name}</Text>
                       <Text fontSize="0.85rem" color="#cbd5e0">
@@ -141,4 +138,3 @@ export const GameScreen = () => {
     </Box>
   );
 };
-

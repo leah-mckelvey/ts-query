@@ -6,7 +6,11 @@ import { QueryClient } from '@ts-query/core';
 import { QueryClientProvider } from '../context';
 import { useMutation } from '../use-mutation';
 
-function TestComponent({ mutationFn }: { mutationFn: (data: string) => Promise<string> }) {
+function TestComponent({
+  mutationFn,
+}: {
+  mutationFn: (data: string) => Promise<string>;
+}) {
   const { mutate, state } = useMutation({
     mutationFn,
   });
@@ -31,24 +35,29 @@ describe('useMutation', () => {
   it('should execute mutation on button click', async () => {
     const user = userEvent.setup();
     const queryClient = new QueryClient();
-    const mutationFn = vi.fn(async (data: string) => {
-      await new Promise(resolve => setTimeout(resolve, 50));
+    const mutationFn = vi.fn(async (_data: string) => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
       return 'mutation result';
     });
 
     render(
       <QueryClientProvider client={queryClient}>
         <TestComponent mutationFn={mutationFn} />
-      </QueryClientProvider>
+      </QueryClientProvider>,
     );
 
     const button = screen.getByText('Mutate');
     await user.click(button);
 
     // Check for loading state (might be too fast, so we'll just check for success)
-    await waitFor(() => {
-      expect(screen.getByText('Success: mutation result')).toBeInTheDocument();
-    }, { timeout: 2000 });
+    await waitFor(
+      () => {
+        expect(
+          screen.getByText('Success: mutation result'),
+        ).toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
 
     expect(mutationFn).toHaveBeenCalledWith('test input');
   });
@@ -61,7 +70,7 @@ describe('useMutation', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <TestComponent mutationFn={mutationFn} />
-      </QueryClientProvider>
+      </QueryClientProvider>,
     );
 
     const button = screen.getByText('Mutate');
@@ -84,13 +93,15 @@ describe('useMutation', () => {
         onSuccess,
       });
 
-      return <button onClick={() => mutate('input').catch(() => {})}>Mutate</button>;
+      return (
+        <button onClick={() => mutate('input').catch(() => {})}>Mutate</button>
+      );
     }
 
     render(
       <QueryClientProvider client={queryClient}>
         <ComponentWithCallback />
-      </QueryClientProvider>
+      </QueryClientProvider>,
     );
 
     const button = screen.getByText('Mutate');
@@ -113,7 +124,9 @@ describe('useMutation', () => {
 
       return (
         <div>
-          <button onClick={() => mutate('input').catch(() => {})}>Mutate</button>
+          <button onClick={() => mutate('input').catch(() => {})}>
+            Mutate
+          </button>
           <button onClick={reset}>Reset</button>
           {state.isSuccess && <div>Success: {state.data}</div>}
           {state.status === 'idle' && <div>Idle</div>}
@@ -124,7 +137,7 @@ describe('useMutation', () => {
     render(
       <QueryClientProvider client={queryClient}>
         <ComponentWithReset />
-      </QueryClientProvider>
+      </QueryClientProvider>,
     );
 
     // Execute mutation
@@ -148,7 +161,9 @@ describe('useMutation', () => {
     const mutationFn = vi.fn().mockResolvedValue('result');
 
     // Suppress console.error for this test
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi
+      .spyOn(console, 'error')
+      .mockImplementation(() => {});
 
     expect(() => {
       render(<TestComponent mutationFn={mutationFn} />);
@@ -157,4 +172,3 @@ describe('useMutation', () => {
     consoleError.mockRestore();
   });
 });
-
