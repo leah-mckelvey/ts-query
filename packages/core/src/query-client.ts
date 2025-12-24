@@ -9,18 +9,24 @@ export class QueryClient {
     return typeof key === 'string' ? key : JSON.stringify(key);
   }
 
-  getQuery<TData = unknown, TError = Error>(
-    options: QueryOptions<TData, TError>
-  ): Query<TData, TError> {
-    const key = this.getQueryKey(options.queryKey);
-    
-    if (!this.queries.has(key)) {
-      const query = new Query<TData, TError>(options);
-      this.queries.set(key, query);
-    }
+	  getQuery<TData = unknown, TError = Error>(
+	    options: QueryOptions<TData, TError>
+	  ): Query<TData, TError> {
+	    const key = this.getQueryKey(options.queryKey);
+	    
+	    if (!this.queries.has(key)) {
+	      const query = new Query<TData, TError>(options, () => {
+	        // Only remove if this is still the active instance for this key.
+	        const current = this.queries.get(key);
+	        if (current === query) {
+	          this.queries.delete(key);
+	        }
+	      });
+	      this.queries.set(key, query);
+	    }
 
-    return this.queries.get(key)!;
-  }
+	    return this.queries.get(key)!;
+	  }
 
   invalidateQueries(queryKey?: QueryKey): void {
     if (queryKey) {

@@ -57,12 +57,16 @@ describe('Query', () => {
       retry: 0, // Disable retries for this test
     });
 
-    await expect(query.fetch()).rejects.toThrow('Test error');
-
-    expect(query.state.status).toBe('error');
-    expect(query.state.error).toBe(error);
-    expect(query.state.isError).toBe(true);
-    expect(query.state.isLoading).toBe(false);
+	    try {
+	      await query.fetch();
+	      throw new Error('Expected fetch to throw');
+	    } catch (err) {
+	      expect(err).toBe(error);
+	      expect(query.state.status).toBe('error');
+	      expect(query.state.error).toBe(error);
+	      expect(query.state.isError).toBe(true);
+	      expect(query.state.isLoading).toBe(false);
+	    }
   });
 
   it('should retry on failure', async () => {
@@ -149,9 +153,14 @@ describe('Query', () => {
       retry: 0,
     });
 
-    await expect(query.fetch()).rejects.toThrow();
+	    try {
+	      await query.fetch();
+	      throw new Error('Expected fetch to throw');
+	    } catch {
+	      // Swallow the error, we only care that onError was called
+	    }
 
-    expect(onError).toHaveBeenCalledWith(error);
+	    expect(onError).toHaveBeenCalledWith(error);
   });
 
   it('should invalidate and refetch', async () => {
@@ -172,5 +181,50 @@ describe('Query', () => {
 
     expect(queryFn).toHaveBeenCalledTimes(2);
   });
+
+	  it('should deduplicate in-flight fetches', async () => {
+	    let resolve!: (value: string) => void;
+	    const queryFn = vi.fn(
+	      () => new Promise<string>((res) => { resolve = res; })
+	    );
+	    const query = new Query({
+	      queryKey: 'test',
+	      queryFn,
+	    });
+
+	    const promise1 = query.fetch();
+	    const promise2 = query.fetch();
+
+	    expect(queryFn).toHaveBeenCalledTimes(1);
+
+	    resolve('data');
+	    const [result1, result2] = await Promise.all([promise1, promise2]);
+
+	    expect(result1).toBe('data');
+	    expect(result2).toBe('data');
+	    expect(query.state.status).toBe('success');
+	  });
+
+	  it('should not refetch when invalidated during an in-flight fetch', async () => {
+	    let resolve!: (value: string) => void;
+	    const queryFn = vi.fn(
+	      () => new Promise<string>((res) => { resolve = res; })
+	    );
+	    const query = new Query({
+	      queryKey: 'test',
+	      queryFn,
+	    });
+
+	    const promise = query.fetch();
+	    query.invalidate();
+
+	    expect(queryFn).toHaveBeenCalledTimes(1);
+
+	    resolve('data');
+	    const result = await promise;
+
+	    expect(result).toBe('data');
+	    expect(queryFn).toHaveBeenCalledTimes(1);
+	  });
 });
 

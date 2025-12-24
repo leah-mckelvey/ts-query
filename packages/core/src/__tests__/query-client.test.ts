@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { QueryClient } from '../query-client';
 
-describe('QueryClient', () => {
+	describe('QueryClient', () => {
   it('should create and cache queries', () => {
     const client = new QueryClient();
     const queryFn = vi.fn().mockResolvedValue('data');
@@ -157,6 +157,91 @@ describe('QueryClient', () => {
     expect(query1).not.toBe(query3);
     expect(query2).not.toBe(query4);
   });
+
+	  it('should garbage collect unused queries after cacheTime', async () => {
+	    vi.useFakeTimers();
+	    const client = new QueryClient();
+	    const queryFn = vi.fn().mockResolvedValue('data');
+
+	    const query1 = client.getQuery({
+	      queryKey: 'test',
+	      queryFn,
+	      cacheTime: 1000,
+	    });
+
+	    await query1.fetch();
+
+	    // Simulate a subscribe/unsubscribe cycle so subscribers become 0.
+	    const unsubscribe = query1.subscribe(() => {});
+	    unsubscribe();
+
+	    await vi.advanceTimersByTimeAsync(1000);
+
+	    const query2 = client.getQuery({
+	      queryKey: 'test',
+	      queryFn,
+	    });
+
+	    expect(query2).not.toBe(query1);
+	    vi.useRealTimers();
+	  });
+
+	  it('should not garbage collect queries that still have subscribers', async () => {
+	    vi.useFakeTimers();
+	    const client = new QueryClient();
+	    const queryFn = vi.fn().mockResolvedValue('data');
+
+	    const query = client.getQuery({
+	      queryKey: 'test',
+	      queryFn,
+	      cacheTime: 1000,
+	    });
+
+	    await query.fetch();
+	    const unsubscribe = query.subscribe(() => {});
+
+	    await vi.advanceTimersByTimeAsync(1000);
+
+	    const sameQuery = client.getQuery({
+	      queryKey: 'test',
+	      queryFn,
+	    });
+
+	    expect(sameQuery).toBe(query);
+	    unsubscribe();
+	    vi.useRealTimers();
+	  });
+
+	  it('should garbage collect errored queries after cacheTime', async () => {
+	    vi.useFakeTimers();
+	    const client = new QueryClient();
+	    const error = new Error('Test error');
+	    const queryFn = vi.fn().mockRejectedValue(error);
+
+	    const query1 = client.getQuery({
+	      queryKey: 'test',
+	      queryFn,
+	      retry: 0,
+	      cacheTime: 1000,
+	    });
+
+	    try {
+	      await query1.fetch();
+	      throw new Error('Expected fetch to throw');
+	    } catch (err) {
+	      expect(err).toBe(error);
+	    }
+
+	    await vi.advanceTimersByTimeAsync(1000);
+
+	    const query2 = client.getQuery({
+	      queryKey: 'test',
+	      queryFn,
+	    });
+
+	    expect(query2).not.toBe(query1);
+	    vi.useRealTimers();
+	  });
 
   it('should create mutations', () => {
     const client = new QueryClient();

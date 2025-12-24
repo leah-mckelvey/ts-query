@@ -6,6 +6,8 @@ export class Query<TData = unknown, TError = Error> {
   private staleTimeout: ReturnType<typeof setTimeout> | null = null;
   private cacheTimeout: ReturnType<typeof setTimeout> | null = null;
   private retryCount = 0;
+  private currentFetchPromise: Promise<TData> | null = null;
+  private onGarbageCollection?: () => void;
 
   state: QueryState<TData, TError> = {
     status: 'idle',
@@ -18,8 +20,12 @@ export class Query<TData = unknown, TError = Error> {
     isStale: false,
   };
 
-  constructor(options: QueryOptions<TData, TError>) {
+  constructor(
+    options: QueryOptions<TData, TError>,
+    onGarbageCollection?: () => void
+  ) {
     this.options = options;
+    this.onGarbageCollection = onGarbageCollection;
   }
 
   subscribe(subscriber: Subscriber<QueryState<TData, TError>>): () => void {
@@ -49,8 +55,32 @@ export class Query<TData = unknown, TError = Error> {
   }
 
   async fetch(): Promise<TData> {
+    // Deduplicate in-flight fetches so that multiple callers share the same
+    // underlying request and retry cycle.
+    if (this.currentFetchPromise) {
+      return this.currentFetchPromise;
+    }
+
+    // New fetch cycle: reset retry count and mark as loading/fetching.
+    this.retryCount = 0;
     this.updateState({ status: 'loading', isFetching: true });
 
+    const promise = this.executeFetch();
+    this.currentFetchPromise = promise;
+
+    promise.finally(() => {
+      this.currentFetchPromise = null;
+    });
+
+    return promise;
+  }
+
+  invalidate(): void {
+    this.clearStaleTimeout();
+    this.fetch();
+  }
+
+  private async executeFetch(): Promise<TData> {
     try {
       const data = await this.options.queryFn();
       this.retryCount = 0;
@@ -68,14 +98,15 @@ export class Query<TData = unknown, TError = Error> {
       return data;
     } catch (error) {
       const err = error as TError;
-      
+
       // Retry logic
       const maxRetries = this.options.retry ?? 3;
       if (this.retryCount < maxRetries) {
         this.retryCount++;
-        const delay = this.options.retryDelay ?? Math.min(1000 * 2 ** this.retryCount, 30000);
+        const delay =
+          this.options.retryDelay ?? Math.min(1000 * 2 ** this.retryCount, 30000);
         await new Promise((resolve) => setTimeout(resolve, delay));
-        return this.fetch();
+        return this.executeFetch();
       }
 
       this.updateState({
@@ -85,13 +116,9 @@ export class Query<TData = unknown, TError = Error> {
       });
 
       this.options.onError?.(err);
+      this.scheduleGarbageCollection();
       throw err;
     }
-  }
-
-  invalidate(): void {
-    this.clearStaleTimeout();
-    this.fetch();
   }
 
   private scheduleStale(): void {
@@ -117,6 +144,7 @@ export class Query<TData = unknown, TError = Error> {
     const cacheTime = this.options.cacheTime ?? 5 * 60 * 1000; // 5 minutes default
     this.cacheTimeout = setTimeout(() => {
       if (this.subscribers.size === 0) {
+        this.onGarbageCollection?.();
         this.destroy();
       }
     }, cacheTime);
@@ -140,6 +168,7 @@ export class Query<TData = unknown, TError = Error> {
     this.clearStaleTimeout();
     this.clearCacheTimeout();
     this.subscribers.clear();
+    this.onGarbageCollection = undefined;
   }
 }
 
