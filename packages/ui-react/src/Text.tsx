@@ -55,4 +55,3 @@ export const Heading: React.FC<HeadingProps> = ({
 
   return <Component style={resolvedStyle} {...rest} />;
 };
-

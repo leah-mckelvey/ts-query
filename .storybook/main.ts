@@ -15,7 +15,10 @@ const config = {
     return mergeConfig(baseConfig, {
       resolve: {
         alias: {
-          '@ts-query/ui-react': path.resolve(__dirname, '../packages/ui-react/src'),
+          '@ts-query/ui-react': path.resolve(
+            __dirname,
+            '../packages/ui-react/src',
+          ),
         },
       },
     });
@@ -23,4 +26,3 @@ const config = {
 };
 
 export default config;
-

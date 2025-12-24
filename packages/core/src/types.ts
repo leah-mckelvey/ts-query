@@ -25,11 +25,19 @@ export interface QueryOptions<TData = unknown, TError = Error> {
   onError?: (error: TError) => void;
 }
 
-export interface MutationOptions<TData = unknown, TVariables = unknown, TError = Error> {
+export interface MutationOptions<
+  TData = unknown,
+  TVariables = unknown,
+  TError = Error,
+> {
   mutationFn: (variables: TVariables) => Promise<TData>;
   onSuccess?: (data: TData, variables: TVariables) => void;
   onError?: (error: TError, variables: TVariables) => void;
-  onSettled?: (data: TData | undefined, error: TError | null, variables: TVariables) => void;
+  onSettled?: (
+    data: TData | undefined,
+    error: TError | null,
+    variables: TVariables,
+  ) => void;
 }
 
 export interface MutationState<TData = unknown, TError = Error> {
@@ -49,4 +57,3 @@ export interface Query<TData = unknown, TError = Error> {
   fetch: () => Promise<TData>;
   invalidate: () => void;
 }
-

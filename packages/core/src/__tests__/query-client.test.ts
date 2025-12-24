@@ -16,7 +16,7 @@ describe('QueryClient', () => {
       queryFn,
     });
 
-    expect(query1).toBe(query2); // Same instance
+    expect(query1).toBe(query2);
   });
 
   it('should create different queries for different keys', () => {
@@ -72,9 +72,8 @@ describe('QueryClient', () => {
     expect(queryFn).toHaveBeenCalledTimes(1);
 
     client.invalidateQueries('test');
-    
-    // Wait for invalidation to trigger refetch
-    await new Promise(resolve => setTimeout(resolve, 0));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(queryFn).toHaveBeenCalledTimes(2);
   });
@@ -101,9 +100,8 @@ describe('QueryClient', () => {
     expect(queryFn2).toHaveBeenCalledTimes(1);
 
     client.invalidateQueries();
-    
-    // Wait for invalidation to trigger refetch
-    await new Promise(resolve => setTimeout(resolve, 0));
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(queryFn1).toHaveBeenCalledTimes(2);
     expect(queryFn2).toHaveBeenCalledTimes(2);
@@ -125,7 +123,7 @@ describe('QueryClient', () => {
       queryFn,
     });
 
-    expect(query1).not.toBe(query2); // New instance after removal
+    expect(query1).not.toBe(query2);
   });
 
   it('should clear all queries', () => {
@@ -158,16 +156,96 @@ describe('QueryClient', () => {
     expect(query2).not.toBe(query4);
   });
 
-  it('should create mutations', () => {
+  it('should garbage collect unused queries after cacheTime', async () => {
+    vi.useFakeTimers();
     const client = new QueryClient();
-    const mutationFn = vi.fn().mockResolvedValue('result');
+    const queryFn = vi.fn().mockResolvedValue('data');
 
-    const mutation = client.createMutation({
-      mutationFn,
+    const query1 = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+      cacheTime: 1000,
     });
 
-    expect(mutation).toBeDefined();
-    expect(mutation.state.status).toBe('idle');
+    await query1.fetch();
+
+    const unsubscribe = query1.subscribe(() => {});
+    unsubscribe();
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    const query2 = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+
+    expect(query2).not.toBe(query1);
+    vi.useRealTimers();
+  });
+
+  it('should not garbage collect queries that still have subscribers', async () => {
+    vi.useFakeTimers();
+    const client = new QueryClient();
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    const query = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+      cacheTime: 1000,
+    });
+
+    await query.fetch();
+    const unsubscribe = query.subscribe(() => {});
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    const sameQuery = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+
+    expect(sameQuery).toBe(query);
+    unsubscribe();
+    vi.useRealTimers();
+  });
+
+  it('should schedule garbage collection when last subscriber unsubscribes after cacheTime has passed', async () => {
+    vi.useFakeTimers();
+    const client = new QueryClient();
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    const query = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+      cacheTime: 1000,
+    });
+
+    await query.fetch();
+
+    const unsubscribe = query.subscribe(() => {});
+
+    // Advance time past the initial cacheTime while the query is still subscribed.
+    await vi.advanceTimersByTimeAsync(1000);
+
+    // Query should not have been garbage collected yet because it still has a subscriber.
+    const sameQuery = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+    expect(sameQuery).toBe(query);
+
+    // Now unsubscribe the last subscriber, which should schedule a new GC timer.
+    unsubscribe();
+
+    // Advance time again to trigger GC after the unsubscribe.
+    await vi.advanceTimersByTimeAsync(1000);
+
+    const newQuery = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+
+    expect(newQuery).not.toBe(query);
+    vi.useRealTimers();
   });
 });
-

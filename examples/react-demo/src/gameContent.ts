@@ -133,4 +133,3 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     condition: (state) => state.goldenCookiesClicked >= 1,
   },
 ];
-

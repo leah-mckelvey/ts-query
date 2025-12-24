@@ -26,4 +26,3 @@ export const BodyText = () => (
     </Text>
   </Box>
 );
-

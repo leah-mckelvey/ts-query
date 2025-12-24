@@ -8,7 +8,10 @@ export interface QueryClientProviderProps {
   children: ReactNode;
 }
 
-export function QueryClientProvider({ client, children }: QueryClientProviderProps) {
+export function QueryClientProvider({
+  client,
+  children,
+}: QueryClientProviderProps) {
   return (
     <QueryClientContext.Provider value={client}>
       {children}
@@ -23,4 +26,3 @@ export function useQueryClient(): QueryClient {
   }
   return client;
 }
-

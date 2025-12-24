@@ -56,7 +56,8 @@ export const Box: React.FC<BoxProps> = ({
 
   const applySpace = (key: keyof React.CSSProperties, value?: SpaceValue) => {
     if (value == null) return;
-    (resolvedStyle as any)[key] = spaceToCss(value);
+    const styleRecord = resolvedStyle as Record<string, string | number>;
+    styleRecord[key as string] = spaceToCss(value);
   };
 
   applySpace('padding', p);
@@ -92,4 +93,3 @@ export const Box: React.FC<BoxProps> = ({
 
   return <Component style={resolvedStyle} {...rest} />;
 };
-

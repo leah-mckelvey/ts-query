@@ -2,7 +2,7 @@ import m from 'mithril';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryClient } from '@ts-query/core';
 import { setQueryClient } from '../query-client-provider';
-import { createMutationComponent } from '../use-mutation';
+import { createMutationComponent, useMutation } from '../use-mutation';
 
 describe('Mithril useMutation', () => {
   let container: HTMLElement;
@@ -22,7 +22,7 @@ describe('Mithril useMutation', () => {
     setQueryClient(queryClient);
 
     const mutationFn = vi.fn(async (data: string) => {
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
       return `Result: ${data}`;
     });
 
@@ -31,15 +31,23 @@ describe('Mithril useMutation', () => {
     });
 
     const App: m.Component = {
-      view: () => m(MutationComponent, {
-        children: (mutation) => m('div', [
-          m('button', {
-            onclick: () => mutation.mutate('test').catch(() => {}),
-          }, mutation.state.isLoading ? 'Loading...' : 'Mutate'),
-          mutation.state.isSuccess && m('div.success', `Data: ${mutation.state.data}`),
-          mutation.state.isError && m('div.error', `Error: ${mutation.state.error?.message}`),
-        ]),
-      }),
+      view: () =>
+        m(MutationComponent, {
+          children: (mutation) =>
+            m('div', [
+              m(
+                'button',
+                {
+                  onclick: () => mutation.mutate('test').catch(() => {}),
+                },
+                mutation.state.isLoading ? 'Loading...' : 'Mutate',
+              ),
+              mutation.state.isSuccess &&
+                m('div.success', `Data: ${mutation.state.data}`),
+              mutation.state.isError &&
+                m('div.error', `Error: ${mutation.state.error?.message}`),
+            ]),
+        }),
     };
 
     m.mount(container, App);
@@ -51,13 +59,13 @@ describe('Mithril useMutation', () => {
     button?.click();
 
     // Wait a tick for the mutation to start
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 5));
     m.redraw.sync();
 
     expect(button?.textContent).toBe('Loading...');
 
     // Wait for mutation to complete
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     m.redraw.sync();
 
     expect(button?.textContent).toBe('Mutate');
@@ -71,7 +79,7 @@ describe('Mithril useMutation', () => {
     setQueryClient(queryClient);
 
     const mutationFn = vi.fn(async () => {
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
       throw new Error('Mutation failed');
     });
 
@@ -80,14 +88,21 @@ describe('Mithril useMutation', () => {
     });
 
     const App: m.Component = {
-      view: () => m(MutationComponent, {
-        children: (mutation) => m('div', [
-          m('button', {
-            onclick: () => mutation.mutate('test').catch(() => {}),
-          }, mutation.state.isLoading ? 'Loading...' : 'Mutate'),
-          mutation.state.isError && m('div.error', `Error: ${mutation.state.error?.message}`),
-        ]),
-      }),
+      view: () =>
+        m(MutationComponent, {
+          children: (mutation) =>
+            m('div', [
+              m(
+                'button',
+                {
+                  onclick: () => mutation.mutate('test').catch(() => {}),
+                },
+                mutation.state.isLoading ? 'Loading...' : 'Mutate',
+              ),
+              mutation.state.isError &&
+                m('div.error', `Error: ${mutation.state.error?.message}`),
+            ]),
+        }),
     };
 
     m.mount(container, App);
@@ -96,13 +111,13 @@ describe('Mithril useMutation', () => {
     button?.click();
 
     // Wait a tick for the mutation to start
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 5));
     m.redraw.sync();
 
     expect(button?.textContent).toBe('Loading...');
 
     // Wait for mutation to fail
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     m.redraw.sync();
 
     const errorDiv = container.querySelector('.error');
@@ -115,7 +130,7 @@ describe('Mithril useMutation', () => {
 
     const onSuccess = vi.fn();
     const mutationFn = vi.fn(async (data: string) => {
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
       return `Result: ${data}`;
     });
 
@@ -125,11 +140,17 @@ describe('Mithril useMutation', () => {
     });
 
     const App: m.Component = {
-      view: () => m(MutationComponent, {
-        children: (mutation) => m('button', {
-          onclick: () => mutation.mutate('test').catch(() => {}),
-        }, 'Mutate'),
-      }),
+      view: () =>
+        m(MutationComponent, {
+          children: (mutation) =>
+            m(
+              'button',
+              {
+                onclick: () => mutation.mutate('test').catch(() => {}),
+              },
+              'Mutate',
+            ),
+        }),
     };
 
     m.mount(container, App);
@@ -138,7 +159,7 @@ describe('Mithril useMutation', () => {
     button?.click();
 
     // Wait for mutation to complete
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(onSuccess).toHaveBeenCalledWith('Result: test', 'test');
   });
@@ -149,7 +170,7 @@ describe('Mithril useMutation', () => {
 
     const onError = vi.fn();
     const mutationFn = vi.fn(async () => {
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
       throw new Error('Mutation failed');
     });
 
@@ -159,11 +180,17 @@ describe('Mithril useMutation', () => {
     });
 
     const App: m.Component = {
-      view: () => m(MutationComponent, {
-        children: (mutation) => m('button', {
-          onclick: () => mutation.mutate('test').catch(() => {}),
-        }, 'Mutate'),
-      }),
+      view: () =>
+        m(MutationComponent, {
+          children: (mutation) =>
+            m(
+              'button',
+              {
+                onclick: () => mutation.mutate('test').catch(() => {}),
+              },
+              'Mutate',
+            ),
+        }),
     };
 
     m.mount(container, App);
@@ -172,7 +199,7 @@ describe('Mithril useMutation', () => {
     button?.click();
 
     // Wait for mutation to fail
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(onError).toHaveBeenCalled();
     expect(onError.mock.calls[0][0]).toBeInstanceOf(Error);
@@ -183,7 +210,7 @@ describe('Mithril useMutation', () => {
     setQueryClient(queryClient);
 
     const mutationFn = vi.fn(async (data: string) => {
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
       return `Result: ${data}`;
     });
 
@@ -191,38 +218,46 @@ describe('Mithril useMutation', () => {
       mutationFn,
     });
 
-    let resetFn: (() => void) | null = null;
-
     const App: m.Component = {
-      view: () => m(MutationComponent, {
-        children: (mutation) => {
-          resetFn = mutation.reset;
-          return m('div', [
-            m('button.mutate', {
-              onclick: () => mutation.mutate('test').catch(() => {}),
-            }, mutation.state.isLoading ? 'Loading...' : 'Mutate'),
-            m('button.reset', {
-              onclick: () => mutation.reset(),
-            }, 'Reset'),
-            mutation.state.isSuccess && m('div.success', 'Success'),
-          ]);
-        },
-      }),
+      view: () =>
+        m(MutationComponent, {
+          children: (mutation) => {
+            return m('div', [
+              m(
+                'button.mutate',
+                {
+                  onclick: () => mutation.mutate('test').catch(() => {}),
+                },
+                mutation.state.isLoading ? 'Loading...' : 'Mutate',
+              ),
+              m(
+                'button.reset',
+                {
+                  onclick: () => mutation.reset(),
+                },
+                'Reset',
+              ),
+              mutation.state.isSuccess && m('div.success', 'Success'),
+            ]);
+          },
+        }),
     };
 
     m.mount(container, App);
 
-    const mutateButton = container.querySelector('.mutate') as HTMLButtonElement;
+    const mutateButton = container.querySelector(
+      '.mutate',
+    ) as HTMLButtonElement;
     mutateButton?.click();
 
     // Wait a tick for the mutation to start
-    await new Promise(resolve => setTimeout(resolve, 5));
+    await new Promise((resolve) => setTimeout(resolve, 5));
     m.redraw.sync();
 
     expect(mutateButton?.textContent).toBe('Loading...');
 
     // Wait for mutation to complete
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     m.redraw.sync();
 
     expect(container.querySelector('.success')).toBeTruthy();
@@ -234,5 +269,20 @@ describe('Mithril useMutation', () => {
 
     expect(container.querySelector('.success')).toBeFalsy();
   });
-});
 
+  it('legacy useMutation helper should execute mutation and support reset', async () => {
+    const queryClient = new QueryClient();
+    setQueryClient(queryClient);
+
+    const mutationFn = vi.fn(async (value: string) => `Result: ${value}`);
+
+    const { mutate, reset } = useMutation({ mutationFn });
+
+    const result = await mutate('legacy');
+    expect(result).toBe('Result: legacy');
+    expect(mutationFn).toHaveBeenCalledWith('legacy');
+
+    // Should not throw and should be callable even without a component
+    expect(() => reset()).not.toThrow();
+  });
+});

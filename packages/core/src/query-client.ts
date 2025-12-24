@@ -3,23 +3,31 @@ import { Mutation } from './mutation';
 import type { QueryKey, QueryOptions, MutationOptions } from './types';
 
 export class QueryClient {
-  private queries = new Map<string, Query<any, any>>();
+  private queries = new Map<string, Query<unknown, unknown>>();
 
   private getQueryKey(key: QueryKey): string {
     return typeof key === 'string' ? key : JSON.stringify(key);
   }
 
   getQuery<TData = unknown, TError = Error>(
-    options: QueryOptions<TData, TError>
+    options: QueryOptions<TData, TError>,
   ): Query<TData, TError> {
     const key = this.getQueryKey(options.queryKey);
-    
-    if (!this.queries.has(key)) {
-      const query = new Query<TData, TError>(options);
-      this.queries.set(key, query);
+
+    let query = this.queries.get(key) as Query<TData, TError> | undefined;
+
+    if (!query) {
+      query = new Query<TData, TError>(options, () => {
+        // Only remove if this is still the active instance for this key.
+        const current = this.queries.get(key);
+        if (current === (query as unknown as Query<unknown, unknown>)) {
+          this.queries.delete(key);
+        }
+      });
+      this.queries.set(key, query as unknown as Query<unknown, unknown>);
     }
 
-    return this.queries.get(key)!;
+    return query;
   }
 
   invalidateQueries(queryKey?: QueryKey): void {
@@ -47,7 +55,7 @@ export class QueryClient {
   }
 
   createMutation<TData = unknown, TVariables = unknown, TError = Error>(
-    options: MutationOptions<TData, TVariables, TError>
+    options: MutationOptions<TData, TVariables, TError>,
   ): Mutation<TData, TVariables, TError> {
     return new Mutation<TData, TVariables, TError>(options);
   }
@@ -56,4 +64,3 @@ export class QueryClient {
     this.removeQueries();
   }
 }
-

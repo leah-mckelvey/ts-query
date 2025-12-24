@@ -1,8 +1,11 @@
 export type GetState<TState> = () => TState;
 
 export type SetState<TState> = (
-  partial: TState | Partial<TState> | ((state: TState) => TState | Partial<TState>),
-  replace?: boolean
+  partial:
+    | TState
+    | Partial<TState>
+    | ((state: TState) => TState | Partial<TState>),
+  replace?: boolean,
 ) => void;
 
 export type StoreListener<TState> = (state: TState, prevState: TState) => void;
@@ -16,11 +19,11 @@ export interface Store<TState> {
 
 export type StateInitializer<TState> = (
   set: SetState<TState>,
-  get: GetState<TState>
+  get: GetState<TState>,
 ) => TState;
 
 export function createStore<TState>(
-  initializer: StateInitializer<TState>
+  initializer: StateInitializer<TState>,
 ): Store<TState> {
   let state: TState;
   const listeners = new Set<StoreListener<TState>>();
@@ -41,13 +44,17 @@ export function createStore<TState>(
 
     let nextState: TState;
 
-    if (replace || typeof nextStateValue !== 'object' || nextStateValue === null) {
+    if (
+      replace ||
+      typeof nextStateValue !== 'object' ||
+      nextStateValue === null
+    ) {
       nextState = nextStateValue as TState;
     } else {
       // Shallow merge for object states when not replacing
       nextState = {
-        ...(prevState as any),
-        ...(nextStateValue as any),
+        ...(prevState as TState & object),
+        ...(nextStateValue as TState & object),
       } as TState;
     }
 

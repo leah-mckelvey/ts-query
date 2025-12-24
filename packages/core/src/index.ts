@@ -18,4 +18,3 @@ export type {
   GetState,
   StateInitializer,
 } from './store';
-

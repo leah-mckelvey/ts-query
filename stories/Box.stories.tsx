@@ -52,4 +52,3 @@ export const Nested = {
     bg: '#edf2f7',
   },
 };
-

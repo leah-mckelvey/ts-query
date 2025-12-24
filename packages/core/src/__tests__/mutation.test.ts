@@ -62,7 +62,9 @@ describe('Mutation', () => {
     const error = new Error('Test error');
     const onError = vi.fn();
     const mutation = new Mutation({
-      mutationFn: async () => { throw error; },
+      mutationFn: async () => {
+        throw error;
+      },
       onError,
     });
 
@@ -87,7 +89,9 @@ describe('Mutation', () => {
     const error = new Error('Test error');
     const onSettled = vi.fn();
     const mutation = new Mutation({
-      mutationFn: async () => { throw error; },
+      mutationFn: async () => {
+        throw error;
+      },
       onSettled,
     });
 
@@ -110,7 +114,7 @@ describe('Mutation', () => {
       expect.objectContaining({
         status: 'success',
         data: 'data',
-      })
+      }),
     );
   });
 
@@ -141,10 +145,9 @@ describe('Mutation', () => {
 
     const unsubscribe = mutation.subscribe(subscriber);
     unsubscribe();
-    
+
     await mutation.mutate('input');
 
     expect(subscriber).not.toHaveBeenCalled();
   });
 });
-

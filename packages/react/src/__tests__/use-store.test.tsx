@@ -63,4 +63,29 @@ describe('useStore', () => {
 
     expect(screen.getAllByText('Count: 1')).toHaveLength(2);
   });
+
+  it('should support custom equalityFn to prevent unnecessary re-renders', () => {
+    const counterStore = createCounterStore();
+
+    function Counter() {
+      const count = useStore(
+        counterStore,
+        (state) => state.count,
+        // Equality function that always treats values as equal
+        () => true,
+      );
+      return <div>Count: {count}</div>;
+    }
+
+    render(<Counter />);
+
+    expect(screen.getByText('Count: 0')).toBeInTheDocument();
+
+    act(() => {
+      counterStore.getState().increment();
+    });
+
+    // Because equalityFn always returns true, the component should not re-render
+    expect(screen.getByText('Count: 0')).toBeInTheDocument();
+  });
 });

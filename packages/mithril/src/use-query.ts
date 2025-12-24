@@ -4,7 +4,7 @@ import { getQueryClient } from './query-client-provider';
 
 // WeakMap to store cleanup functions for queries
 // This avoids memory leaks and type safety issues with attaching to objects
-const cleanupMap = new WeakMap<Query<any, any>, () => void>();
+const cleanupMap = new WeakMap<Query<unknown, unknown>, () => void>();
 
 /**
  * Creates a Mithril component that manages a query with proper lifecycle.
@@ -24,7 +24,7 @@ const cleanupMap = new WeakMap<Query<any, any>, () => void>();
  * })
  */
 export function createQueryComponent<TData = unknown, TError = Error>(
-  options: QueryOptions<TData, TError>
+  options: QueryOptions<TData, TError>,
 ): m.Component<{ children: (state: QueryState<TData, TError>) => m.Children }> {
   let query: Query<TData, TError>;
 
