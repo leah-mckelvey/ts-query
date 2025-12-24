@@ -209,43 +209,43 @@ describe('QueryClient', () => {
     vi.useRealTimers();
   });
 
-	  it('should schedule garbage collection when last subscriber unsubscribes after cacheTime has passed', async () => {
-	    vi.useFakeTimers();
-	    const client = new QueryClient();
-	    const queryFn = vi.fn().mockResolvedValue('data');
+  it('should schedule garbage collection when last subscriber unsubscribes after cacheTime has passed', async () => {
+    vi.useFakeTimers();
+    const client = new QueryClient();
+    const queryFn = vi.fn().mockResolvedValue('data');
 
-	    const query = client.getQuery({
-	      queryKey: 'test',
-	      queryFn,
-	      cacheTime: 1000,
-	    });
+    const query = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+      cacheTime: 1000,
+    });
 
-	    await query.fetch();
+    await query.fetch();
 
-	    const unsubscribe = query.subscribe(() => {});
+    const unsubscribe = query.subscribe(() => {});
 
-	    // Advance time past the initial cacheTime while the query is still subscribed.
-	    await vi.advanceTimersByTimeAsync(1000);
+    // Advance time past the initial cacheTime while the query is still subscribed.
+    await vi.advanceTimersByTimeAsync(1000);
 
-	    // Query should not have been garbage collected yet because it still has a subscriber.
-	    const sameQuery = client.getQuery({
-	      queryKey: 'test',
-	      queryFn,
-	    });
-	    expect(sameQuery).toBe(query);
+    // Query should not have been garbage collected yet because it still has a subscriber.
+    const sameQuery = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+    expect(sameQuery).toBe(query);
 
-	    // Now unsubscribe the last subscriber, which should schedule a new GC timer.
-	    unsubscribe();
+    // Now unsubscribe the last subscriber, which should schedule a new GC timer.
+    unsubscribe();
 
-	    // Advance time again to trigger GC after the unsubscribe.
-	    await vi.advanceTimersByTimeAsync(1000);
+    // Advance time again to trigger GC after the unsubscribe.
+    await vi.advanceTimersByTimeAsync(1000);
 
-	    const newQuery = client.getQuery({
-	      queryKey: 'test',
-	      queryFn,
-	    });
+    const newQuery = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
 
-	    expect(newQuery).not.toBe(query);
-	    vi.useRealTimers();
-	  });
+    expect(newQuery).not.toBe(query);
+    vi.useRealTimers();
+  });
 });
