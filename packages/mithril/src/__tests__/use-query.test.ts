@@ -73,9 +73,11 @@ describe('Mithril useQuery', () => {
     } as const;
 
     const query = queryClient.getQuery(baseOptions);
-    (query as unknown as {
-      updateState: (partial: Partial<typeof query.state>) => void;
-    }).updateState({
+    (
+      query as unknown as {
+        updateState: (partial: Partial<typeof query.state>) => void;
+      }
+    ).updateState({
       status: 'error',
       error,
       isFetching: false,

@@ -55,9 +55,11 @@ describe('Query', () => {
     });
 
     // Simulate error state without triggering unhandled rejections
-    (query as unknown as {
-      updateState: (partial: Partial<typeof query.state>) => void;
-    }).updateState({
+    (
+      query as unknown as {
+        updateState: (partial: Partial<typeof query.state>) => void;
+      }
+    ).updateState({
       status: 'error',
       error,
       isFetching: false,
@@ -154,9 +156,11 @@ describe('Query', () => {
     });
 
     // Call onError directly to avoid creating unhandled rejections
-    (query as unknown as {
-      options: { onError?: (error: Error) => void };
-    }).options.onError?.(error);
+    (
+      query as unknown as {
+        options: { onError?: (error: Error) => void };
+      }
+    ).options.onError?.(error);
 
     expect(onError).toHaveBeenCalledWith(error);
   });

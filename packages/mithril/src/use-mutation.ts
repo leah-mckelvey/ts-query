@@ -15,7 +15,10 @@ export interface UseMutationResult<
 
 // WeakMap to store cleanup functions for mutations
 // This avoids memory leaks and type safety issues with attaching to objects
-const cleanupMap = new WeakMap<Mutation<unknown, unknown, unknown>, () => void>();
+const cleanupMap = new WeakMap<
+  Mutation<unknown, unknown, unknown>,
+  () => void
+>();
 
 /**
  * Creates a Mithril component that manages a mutation with proper lifecycle.
