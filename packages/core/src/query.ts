@@ -29,10 +29,21 @@ export class Query<TData = unknown, TError = Error> {
   }
 
   subscribe(subscriber: Subscriber<QueryState<TData, TError>>): () => void {
-    this.subscribers.add(subscriber);
-    return () => {
-      this.subscribers.delete(subscriber);
-    };
+		this.subscribers.add(subscriber);
+
+		// While there is at least one subscriber, the query is considered "in use",
+		// so ensure any pending garbage-collection timer is cleared.
+		this.clearCacheTimeout();
+
+		return () => {
+			this.subscribers.delete(subscriber);
+
+			// When the last subscriber unsubscribes, (re)schedule garbage collection so
+			// the query can be collected once it truly becomes unused.
+			if (this.subscribers.size === 0) {
+				this.scheduleGarbageCollection();
+			}
+		};
   }
 
   private notify(): void {
