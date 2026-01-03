@@ -4,7 +4,16 @@ import { setQueryClient } from '@ts-query/mithril';
 import App from './App';
 import './style.css';
 
-const queryClient = new QueryClient();
-setQueryClient(queryClient);
+async function bootstrap() {
+  if (import.meta.env.DEV) {
+    const { worker } = await import('./mocks/browser');
+    await worker.start({ onUnhandledRequest: 'bypass' });
+  }
 
-m.mount(document.getElementById('app')!, App);
+  const queryClient = new QueryClient();
+  setQueryClient(queryClient);
+
+  m.mount(document.getElementById('app')!, App);
+}
+
+bootstrap();
