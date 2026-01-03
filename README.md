@@ -218,12 +218,34 @@ Visit http://localhost:5174
 
 ## Development
 
-### Build all packages
+### Local setup
 
 ```bash
 npm install
+```
+
+### Build all packages
+
+```bash
 npm run build
 ```
+
+### Run the full check pipeline (format, lint, tests + coverage)
+
+Before pushing or opening a PR, always run:
+
+```bash
+npm run check
+```
+
+This script runs, in order:
+
+- `npm run format:check` – Prettier in check mode
+- `npm run lint` – ESLint over the packages
+- `npm run test:coverage` – Builds all workspaces and runs Vitest with coverage
+
+The `main` branch is configured so that CI runs the same `npm run check` command
+and requires it to pass before merge.
 
 ### Watch mode for development
 
