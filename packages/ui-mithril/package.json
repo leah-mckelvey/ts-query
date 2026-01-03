@@ -1,0 +1,26 @@
+{
+  "name": "@ts-query/ui-mithril",
+  "version": "1.0.0",
+  "description": "Mithril UI primitives (Box, Stack, Text, Heading, Button) for ts-query demos",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "mithril",
+    "ui",
+    "components",
+    "box",
+    "button",
+    "stack",
+    "text",
+    "heading"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "mithril": "^2.0.0"
+  }
+}
