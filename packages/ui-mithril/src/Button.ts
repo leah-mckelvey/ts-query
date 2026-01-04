@@ -65,7 +65,7 @@ const getButtonStyles = (options: {
     fontWeight: 600,
     borderRadius: '0.375rem',
     cursor: 'pointer',
-    borderWidth: 1,
+    borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: 'transparent',
     fontSize: sizeDef.fontSize,
