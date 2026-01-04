@@ -1,0 +1,28 @@
+{
+  "name": "mithril-dashboard",
+  "version": "1.0.0",
+  "description": "Mithril dashboard demo for ts-query",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/mithril": "^2.2.7",
+    "msw": "^2.12.7",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0"
+  },
+  "dependencies": {
+    "@ts-query/core": "^1.0.0",
+    "@ts-query/mithril": "^1.0.0",
+    "@ts-query/ui-mithril": "^1.0.0",
+    "mithril": "^2.3.8"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
+  }
+}
