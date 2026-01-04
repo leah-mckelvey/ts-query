@@ -19,5 +19,10 @@
     "@ts-query/mithril": "^1.0.0",
     "@ts-query/ui-mithril": "^1.0.0",
     "mithril": "^2.3.8"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }
