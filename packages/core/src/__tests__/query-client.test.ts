@@ -249,3 +249,272 @@ describe('QueryClient', () => {
     vi.useRealTimers();
   });
 });
+
+describe('QueryClient with SharedCache (L2)', () => {
+  function createMockSharedCache() {
+    const store = new Map<string, { value: string; expiry: number }>();
+    return {
+      store,
+      adapter: {
+        get: vi.fn(async (key: string) => {
+          const entry = store.get(key);
+          if (!entry) return null;
+          if (Date.now() > entry.expiry) {
+            store.delete(key);
+            return null;
+          }
+          return entry.value;
+        }),
+        set: vi.fn(async (key: string, value: string, ttlMs: number) => {
+          store.set(key, { value, expiry: Date.now() + ttlMs });
+        }),
+        delete: vi.fn(async (key: string) => {
+          store.delete(key);
+        }),
+      },
+    };
+  }
+
+  it('should fetch from L3 (queryFn) when L2 cache is empty', async () => {
+    const { adapter } = createMockSharedCache();
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue({ id: 1, name: 'Test' });
+
+    const query = client.getQuery({
+      queryKey: ['user', 1],
+      queryFn,
+    });
+
+    const result = await query.fetch();
+
+    expect(result).toEqual({ id: 1, name: 'Test' });
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    expect(adapter.get).toHaveBeenCalledTimes(1);
+    expect(adapter.set).toHaveBeenCalledTimes(1);
+  });
+
+  it('should return from L2 cache and skip L3 when data exists in shared cache', async () => {
+    const { adapter, store } = createMockSharedCache();
+
+    // Pre-populate the shared cache
+    store.set('["user",1]', {
+      value: JSON.stringify({ id: 1, name: 'Cached User' }),
+      expiry: Date.now() + 60000,
+    });
+
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue({ id: 1, name: 'Fresh User' });
+
+    const query = client.getQuery({
+      queryKey: ['user', 1],
+      queryFn,
+    });
+
+    const result = await query.fetch();
+
+    expect(result).toEqual({ id: 1, name: 'Cached User' });
+    expect(queryFn).not.toHaveBeenCalled(); // L3 should be skipped
+    expect(adapter.get).toHaveBeenCalledTimes(1);
+    expect(adapter.set).not.toHaveBeenCalled(); // No need to re-set
+  });
+
+  it('should populate L2 cache after fetching from L3', async () => {
+    const { adapter, store } = createMockSharedCache();
+    const client = new QueryClient({
+      sharedCache: { adapter, defaultTtl: 30000 },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue({ id: 1, name: 'Test' });
+
+    const query = client.getQuery({
+      queryKey: 'test-key',
+      queryFn,
+    });
+
+    await query.fetch();
+
+    expect(adapter.set).toHaveBeenCalledWith(
+      'test-key',
+      JSON.stringify({ id: 1, name: 'Test' }),
+      30000,
+    );
+    expect(store.has('test-key')).toBe(true);
+  });
+
+  it('should use query-level sharedCacheTtl over client default', async () => {
+    const { adapter } = createMockSharedCache();
+    const client = new QueryClient({
+      sharedCache: { adapter, defaultTtl: 30000 },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    const query = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+      sharedCacheTtl: 5000, // Override
+    });
+
+    await query.fetch();
+
+    expect(adapter.set).toHaveBeenCalledWith('test', '"data"', 5000);
+  });
+
+  it('should skip shared cache when skipSharedCache is true', async () => {
+    const { adapter } = createMockSharedCache();
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    const query = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+      skipSharedCache: true,
+    });
+
+    await query.fetch();
+
+    expect(adapter.get).not.toHaveBeenCalled();
+    expect(adapter.set).not.toHaveBeenCalled();
+    expect(queryFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('should delete from shared cache on invalidateQueries', async () => {
+    const { adapter } = createMockSharedCache();
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    const query = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+
+    await query.fetch();
+
+    client.invalidateQueries('test');
+
+    expect(adapter.delete).toHaveBeenCalledWith('test');
+  });
+
+  it('should delete from shared cache on removeQueries', async () => {
+    const { adapter } = createMockSharedCache();
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+
+    client.removeQueries('test');
+
+    expect(adapter.delete).toHaveBeenCalledWith('test');
+  });
+
+  it('should gracefully handle shared cache get errors', async () => {
+    const adapter = {
+      get: vi.fn().mockRejectedValue(new Error('Redis connection failed')),
+      set: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue('fallback data');
+
+    const query = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+
+    // Should not throw, should fall through to L3
+    const result = await query.fetch();
+
+    expect(result).toBe('fallback data');
+    expect(queryFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('should gracefully handle shared cache set errors', async () => {
+    const adapter = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockRejectedValue(new Error('Redis connection failed')),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    const query = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+
+    // Should not throw, should still return data
+    const result = await query.fetch();
+
+    expect(result).toBe('data');
+    expect(query.state.data).toBe('data');
+  });
+
+  it('should deduplicate concurrent requests with shared cache', async () => {
+    const { adapter } = createMockSharedCache();
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    let callCount = 0;
+    const queryFn = vi.fn().mockImplementation(async () => {
+      callCount++;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return `result-${callCount}`;
+    });
+
+    const query = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+
+    // Fire 5 concurrent requests
+    const results = await Promise.all([
+      query.fetch(),
+      query.fetch(),
+      query.fetch(),
+      query.fetch(),
+      query.fetch(),
+    ]);
+
+    // All should get the same result
+    expect(results).toEqual([
+      'result-1',
+      'result-1',
+      'result-1',
+      'result-1',
+      'result-1',
+    ]);
+
+    // L3 should only be called once
+    expect(queryFn).toHaveBeenCalledTimes(1);
+
+    // L2 should only be set once
+    expect(adapter.set).toHaveBeenCalledTimes(1);
+  });
+});

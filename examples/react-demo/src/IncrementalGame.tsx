@@ -2,8 +2,11 @@ import { useStore } from '@ts-query/react';
 import { Box, Button, Heading, Stack, Text } from '@ts-query/ui-react';
 import { gameStore, BUILDING_COST_MULTIPLIER } from './gameStore';
 import { UPGRADES, ACHIEVEMENTS } from './gameContent';
+import { Leaderboard } from './Leaderboard';
+import { GlobalEvents } from './GlobalEvents';
 
 const formatNumber = (value: number): string => {
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
   if (value >= 1_000) return `${(value / 1_000).toFixed(2)}K`;
   return value.toFixed(0);
@@ -43,11 +46,15 @@ export const IncrementalGame = () => {
       color="#edf2f7"
       style={{ minHeight: '100vh', position: 'relative' }}
     >
+      {/* Global Events Banner */}
+      <GlobalEvents />
+
       <Stack direction="row" gap={6} style={{ alignItems: 'flex-start' }}>
+        {/* Left column: Main game */}
         <Box style={{ flex: 1 }}>
           <Heading level={1}>Cookie Clicker Clone</Heading>
           <Text fontSize="0.9rem" color="#a0aec0">
-            Built with @ts-query/ui-react primitives
+            Built with @ts-query/ui-react • Backend with tiered caching
           </Text>
 
           <Box mt={4} mb={4}>
@@ -66,6 +73,11 @@ export const IncrementalGame = () => {
           >
             Click for {cookiesPerClick} cookie{cookiesPerClick !== 1 ? 's' : ''}
           </Button>
+
+          {/* Leaderboard below main game area */}
+          <Box mt={6}>
+            <Leaderboard />
+          </Box>
         </Box>
 
         <Box

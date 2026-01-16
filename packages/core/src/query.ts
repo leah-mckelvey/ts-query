@@ -1,4 +1,18 @@
-import type { QueryOptions, QueryState, Subscriber } from './types';
+import type {
+  QueryOptions,
+  QueryState,
+  Subscriber,
+  SharedCacheAdapter,
+} from './types';
+
+/**
+ * Context for shared cache (L2) operations, passed from QueryClient.
+ */
+export interface SharedCacheContext {
+  adapter: SharedCacheAdapter;
+  key: string;
+  ttl: number;
+}
 
 export class Query<TData = unknown, TError = Error> {
   private subscribers = new Set<Subscriber<QueryState<TData, TError>>>();
@@ -8,6 +22,7 @@ export class Query<TData = unknown, TError = Error> {
   private retryCount = 0;
   private currentFetchPromise: Promise<TData> | null = null;
   private onGarbageCollection?: () => void;
+  private sharedCacheContext?: SharedCacheContext;
 
   state: QueryState<TData, TError> = {
     status: 'idle',
@@ -23,9 +38,11 @@ export class Query<TData = unknown, TError = Error> {
   constructor(
     options: QueryOptions<TData, TError>,
     onGarbageCollection?: () => void,
+    sharedCacheContext?: SharedCacheContext,
   ) {
     this.options = options;
     this.onGarbageCollection = onGarbageCollection;
+    this.sharedCacheContext = sharedCacheContext;
   }
 
   subscribe(subscriber: Subscriber<QueryState<TData, TError>>): () => void {
@@ -91,10 +108,78 @@ export class Query<TData = unknown, TError = Error> {
     this.fetch();
   }
 
+  /**
+   * Try to get data from the shared cache (L2).
+   * Returns the parsed data if found, or null if not found or on error.
+   */
+  private async getFromSharedCache(): Promise<TData | null> {
+    if (!this.sharedCacheContext) return null;
+
+    try {
+      const cached = await this.sharedCacheContext.adapter.get(
+        this.sharedCacheContext.key,
+      );
+      if (cached != null) {
+        return JSON.parse(cached) as TData;
+      }
+    } catch {
+      // Shared cache errors should not break the fetch flow
+      // Silently fall through to L3
+    }
+    return null;
+  }
+
+  /**
+   * Store data in the shared cache (L2).
+   */
+  private async setInSharedCache(data: TData): Promise<void> {
+    if (!this.sharedCacheContext) return;
+
+    try {
+      await this.sharedCacheContext.adapter.set(
+        this.sharedCacheContext.key,
+        JSON.stringify(data),
+        this.sharedCacheContext.ttl,
+      );
+    } catch {
+      // Shared cache errors should not break the fetch flow
+      // Silently ignore
+    }
+  }
+
   private async executeFetch(): Promise<TData> {
     try {
+      // L2: Check shared cache first (only if configured)
+      if (this.sharedCacheContext) {
+        const cachedData = await this.getFromSharedCache();
+        if (cachedData !== null) {
+          // L2 hit: populate L1 and return
+          this.retryCount = 0;
+          this.updateState({
+            status: 'success',
+            data: cachedData,
+            error: null,
+            isFetching: false,
+          });
+
+          this.options.onSuccess?.(cachedData);
+          this.scheduleStale();
+          this.scheduleGarbageCollection();
+
+          return cachedData;
+        }
+      }
+
+      // L3: Fetch from source (queryFn)
       const data = await this.options.queryFn();
       this.retryCount = 0;
+
+      // Populate L2 (shared cache) - fire and forget to avoid blocking
+      if (this.sharedCacheContext) {
+        this.setInSharedCache(data);
+      }
+
+      // Populate L1 (in-process cache via state)
       this.updateState({
         status: 'success',
         data,
@@ -110,7 +195,7 @@ export class Query<TData = unknown, TError = Error> {
     } catch (error) {
       const err = error as TError;
 
-      // Retry logic
+      // Retry logic (only for L3 failures, not L2)
       const maxRetries = this.options.retry ?? 3;
       if (this.retryCount < maxRetries) {
         this.retryCount++;
