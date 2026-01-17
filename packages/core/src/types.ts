@@ -18,8 +18,8 @@ export interface QueryState<TData = unknown, TError = Error> {
  * Used as L2 cache in the tiered caching hierarchy: L1 (in-process) → L2 (shared) → L3 (source)
  */
 export interface SharedCacheAdapter {
-  /** Get a value from the shared cache. Returns null/undefined if not found. */
-  get: (key: string) => Promise<string | null | undefined>;
+  /** Get a value from the shared cache. Returns null if not found. */
+  get: (key: string) => Promise<string | null>;
   /** Set a value in the shared cache with a TTL in milliseconds. */
   set: (key: string, value: string, ttlMs: number) => Promise<void>;
   /** Delete a value from the shared cache. */

@@ -517,4 +517,100 @@ describe('QueryClient with SharedCache (L2)', () => {
     // L2 should only be set once
     expect(adapter.set).toHaveBeenCalledTimes(1);
   });
+
+  it('should gracefully handle malformed JSON in shared cache and fall back to L3', async () => {
+    const adapter = {
+      get: vi.fn().mockResolvedValue('not valid json {{{'),
+      set: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue({ id: 1, name: 'Fresh Data' });
+
+    const query = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+
+    // Should not throw, should fall through to L3 when JSON.parse fails
+    const result = await query.fetch();
+
+    expect(result).toEqual({ id: 1, name: 'Fresh Data' });
+    expect(adapter.get).toHaveBeenCalledTimes(1);
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    // Should still try to cache the fresh data
+    expect(adapter.set).toHaveBeenCalledTimes(1);
+  });
+
+  it('should gracefully handle non-serializable data (circular refs) and skip L2 write', async () => {
+    const adapter = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    // Create circular reference that cannot be JSON.stringify'd
+    interface CircularData {
+      name: string;
+      self?: CircularData;
+    }
+    const circularData: CircularData = { name: 'test' };
+    circularData.self = circularData;
+
+    const queryFn = vi.fn().mockResolvedValue(circularData);
+
+    const query = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+
+    // Should not throw, should return data even though it can't be cached
+    const result = await query.fetch();
+
+    expect(result).toBe(circularData);
+    expect(result.name).toBe('test');
+    expect(result.self).toBe(circularData);
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    // L2 set should NOT be called because data can't be serialized
+    expect(adapter.set).not.toHaveBeenCalled();
+  });
+
+  it('should gracefully handle BigInt data and skip L2 write', async () => {
+    const adapter = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    // BigInt cannot be JSON.stringify'd
+    const dataWithBigInt = { value: BigInt(9007199254740991) };
+
+    const queryFn = vi.fn().mockResolvedValue(dataWithBigInt);
+
+    const query = client.getQuery({
+      queryKey: 'test',
+      queryFn,
+    });
+
+    // Should not throw, should return data even though it can't be cached
+    const result = await query.fetch();
+
+    expect(result).toBe(dataWithBigInt);
+    expect(result.value).toBe(BigInt(9007199254740991));
+    expect(queryFn).toHaveBeenCalledTimes(1);
+    // L2 set should NOT be called because BigInt can't be serialized
+    expect(adapter.set).not.toHaveBeenCalled();
+  });
 });

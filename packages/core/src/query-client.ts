@@ -73,9 +73,14 @@ export class QueryClient {
       // Also invalidate in shared cache (fire-and-forget, errors are swallowed)
       this.sharedCacheConfig?.adapter.delete(key).catch(() => {});
     } else {
-      // Invalidate all queries
+      // Invalidate all in-memory queries for this client instance (L1 cache).
       this.queries.forEach((query) => query.invalidate());
-      // Note: We don't clear entire shared cache here as it may be shared with other clients
+      // Important: We intentionally do NOT clear the entire shared cache (L2) here because:
+      // 1. The shared cache may be used by multiple QueryClient instances across processes/services
+      // 2. A "clear all" from a single client could unexpectedly evict data other clients rely on
+      // 3. Each Query's invalidate() already skips L2 on refetch via skipSharedCacheOnNextFetch
+      // If global L2 eviction is needed, it should be done via direct adapter access or an
+      // explicit higher-level operation that coordinates across all affected clients.
     }
   }
 

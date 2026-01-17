@@ -136,11 +136,29 @@ export class Query<TData = unknown, TError = Error> {
         this.sharedCacheContext.key,
       );
       if (cached != null) {
-        return JSON.parse(cached) as TData;
+        try {
+          return JSON.parse(cached) as TData;
+        } catch (parseError) {
+          // Malformed or corrupted cache entry - log separately for diagnosis
+          // This could indicate data corruption, version mismatch, or tampering
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn(
+              `[ts-query] Shared cache parse failed for key "${this.sharedCacheContext.key}": ` +
+                `cached data is malformed or corrupted`,
+              parseError,
+            );
+          }
+          // Fall through to L3 (source) to get fresh data
+        }
       }
-    } catch {
-      // Shared cache errors should not break the fetch flow
-      // Silently fall through to L3
+    } catch (adapterError) {
+      // Shared cache adapter errors (network, connection, etc.) should not break the fetch flow
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `[ts-query] Shared cache read failed for key "${this.sharedCacheContext.key}":`,
+          adapterError,
+        );
+      }
     }
     return CACHE_MISS;
   }
