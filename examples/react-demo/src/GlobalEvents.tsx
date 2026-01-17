@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Box, Stack, Text } from '@ts-query/ui-react';
 import { getGlobalEvents, type GlobalEvent } from './api';
 
@@ -22,6 +22,13 @@ export const GlobalEvents = ({ onEventsChange }: GlobalEventsProps) => {
   const [events, setEvents] = useState<GlobalEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // Use ref to store the latest callback to avoid re-creating the interval
+  // when the callback reference changes (prevents memory leaks from overlapping intervals)
+  const onEventsChangeRef = useRef(onEventsChange);
+  useEffect(() => {
+    onEventsChangeRef.current = onEventsChange;
+  }, [onEventsChange]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -36,7 +43,8 @@ export const GlobalEvents = ({ onEventsChange }: GlobalEventsProps) => {
           );
           setEvents(active);
           setError(null);
-          onEventsChange?.(active);
+          // Use ref to call the latest callback without triggering re-renders
+          onEventsChangeRef.current?.(active);
         }
       } catch (err) {
         if (!cancelled) {
@@ -56,7 +64,7 @@ export const GlobalEvents = ({ onEventsChange }: GlobalEventsProps) => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [onEventsChange]);
+  }, []); // Empty deps - interval is stable, callback accessed via ref
 
   if (error || events.length === 0) {
     return null; // Don't show anything if no events or error

@@ -11,6 +11,58 @@
 const API_BASE = 'http://localhost:3001/api';
 
 // ============================================================================
+// Error Classes
+// ============================================================================
+
+/**
+ * Error thrown when the network request fails (e.g., offline, DNS failure, CORS).
+ */
+export class NetworkError extends Error {
+  readonly cause?: unknown;
+
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = 'NetworkError';
+    this.cause = cause;
+  }
+}
+
+/**
+ * Error thrown when the server responds with an error status code.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly serverMessage?: string;
+
+  constructor(message: string, status: number, serverMessage?: string) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.serverMessage = serverMessage;
+  }
+}
+
+/**
+ * Wrapper around fetch that distinguishes network errors from server errors.
+ */
+async function fetchWithErrorHandling(
+  url: string,
+  options?: RequestInit,
+): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(url, options);
+  } catch (error) {
+    // Network-level failure (offline, DNS, CORS, etc.)
+    throw new NetworkError(
+      'Network request failed. Please check your internet connection.',
+      error,
+    );
+  }
+  return response;
+}
+
+// ============================================================================
 // Types (mirrored from game-server)
 // ============================================================================
 
@@ -55,7 +107,7 @@ export async function registerPlayer(displayName: string): Promise<{
   playerId: string;
   playerSecret: string;
 }> {
-  const res = await fetch(`${API_BASE}/register`, {
+  const res = await fetchWithErrorHandling(`${API_BASE}/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ displayName }),
@@ -63,7 +115,11 @@ export async function registerPlayer(displayName: string): Promise<{
 
   if (!res.ok) {
     const err = await res.json();
-    throw new Error(err.error || 'Registration failed');
+    throw new ApiError(
+      err.error || 'Registration failed',
+      res.status,
+      err.error,
+    );
   }
 
   const data = await res.json();
@@ -78,10 +134,10 @@ export async function getLeaderboard(playerId?: string): Promise<{
     ? `${API_BASE}/leaderboard?playerId=${playerId}`
     : `${API_BASE}/leaderboard`;
 
-  const res = await fetch(url);
+  const res = await fetchWithErrorHandling(url);
 
   if (!res.ok) {
-    throw new Error('Failed to fetch leaderboard');
+    throw new ApiError('Failed to fetch leaderboard', res.status);
   }
 
   return res.json();
@@ -91,10 +147,10 @@ export async function getGlobalEvents(): Promise<{
   events: GlobalEvent[];
   serverTime: number;
 }> {
-  const res = await fetch(`${API_BASE}/events`);
+  const res = await fetchWithErrorHandling(`${API_BASE}/events`);
 
   if (!res.ok) {
-    throw new Error('Failed to fetch events');
+    throw new ApiError('Failed to fetch events', res.status);
   }
 
   return res.json();
@@ -103,10 +159,13 @@ export async function getGlobalEvents(): Promise<{
 export async function getPlayerProfile(
   playerId: string,
 ): Promise<PlayerProfile> {
-  const res = await fetch(`${API_BASE}/player/${playerId}`);
+  const res = await fetchWithErrorHandling(`${API_BASE}/player/${playerId}`);
 
   if (!res.ok) {
-    throw new Error('Player not found');
+    if (res.status === 404) {
+      throw new ApiError('Player not found', res.status);
+    }
+    throw new ApiError('Failed to fetch player profile', res.status);
   }
 
   return res.json();
@@ -126,7 +185,7 @@ export async function syncState(
     lastUpdate: number;
   },
 ): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE}/sync`, {
+  const res = await fetchWithErrorHandling(`${API_BASE}/sync`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ playerId, playerSecret, state }),
@@ -134,7 +193,7 @@ export async function syncState(
 
   if (!res.ok) {
     const err = await res.json();
-    throw new Error(err.error || 'Sync failed');
+    throw new ApiError(err.error || 'Sync failed', res.status, err.error);
   }
 
   return res.json();

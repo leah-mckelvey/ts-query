@@ -196,7 +196,12 @@ app.get('/api/player/:playerId', async (req, res) => {
     res.json(profile);
   } catch (error) {
     console.error('Player profile error:', error);
-    res.status(404).json({ error: 'Player not found' });
+    // Distinguish "not found" from other server errors
+    if (error instanceof Error && error.message === 'Player not found') {
+      res.status(404).json({ error: 'Player not found' });
+    } else {
+      res.status(500).json({ error: 'Failed to fetch player profile' });
+    }
   }
 });
 

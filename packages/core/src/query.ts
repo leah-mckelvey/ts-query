@@ -30,6 +30,7 @@ export class Query<TData = unknown, TError = Error> {
   private currentFetchPromise: Promise<TData> | null = null;
   private onGarbageCollection?: () => void;
   private sharedCacheContext?: SharedCacheContext;
+  private skipSharedCacheOnNextFetch = false;
 
   state: QueryState<TData, TError> = {
     status: 'idle',
@@ -110,8 +111,14 @@ export class Query<TData = unknown, TError = Error> {
     return promise;
   }
 
+  /**
+   * Invalidate the query, bypassing L2 shared cache on refetch.
+   * This ensures fresh data is fetched from L3 (source) after invalidation.
+   */
   invalidate(): void {
     this.clearStaleTimeout();
+    // Skip L2 on next fetch to avoid race condition where delete hasn't completed
+    this.skipSharedCacheOnNextFetch = true;
     this.fetch();
   }
 
@@ -140,26 +147,57 @@ export class Query<TData = unknown, TError = Error> {
 
   /**
    * Store data in the shared cache (L2).
+   *
+   * Note: Only values that can be safely JSON-serialized will be stored.
+   * Data containing circular references, BigInt, or other non-JSON-safe types
+   * will not be stored and will fall back to L3 on next fetch.
    */
   private async setInSharedCache(data: TData): Promise<void> {
     if (!this.sharedCacheContext) return;
 
+    // Pre-validate JSON serialization to catch circular refs, BigInt, etc.
+    let serialized: string;
+    try {
+      serialized = JSON.stringify(data);
+    } catch (serializationError) {
+      // Data cannot be serialized (circular refs, BigInt, etc.)
+      // Skip writing to shared cache - will fall back to L3 on next fetch
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `[ts-query] Shared cache write skipped for key "${this.sharedCacheContext.key}": ` +
+            `data cannot be JSON-serialized`,
+          serializationError,
+        );
+      }
+      return;
+    }
+
     try {
       await this.sharedCacheContext.adapter.set(
         this.sharedCacheContext.key,
-        JSON.stringify(data),
+        serialized,
         this.sharedCacheContext.ttl,
       );
-    } catch {
+    } catch (cacheError) {
       // Shared cache errors should not break the fetch flow
-      // Silently ignore
+      // Log in non-production for debugging
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          `[ts-query] Shared cache write failed for key "${this.sharedCacheContext.key}":`,
+          cacheError,
+        );
+      }
     }
   }
 
   private async executeFetch(): Promise<TData> {
+    // Check if we should skip L2 (e.g., after invalidation)
+    const shouldSkipSharedCache = this.skipSharedCacheOnNextFetch;
+    this.skipSharedCacheOnNextFetch = false; // Reset flag
+
     try {
-      // L2: Check shared cache first (only if configured)
-      if (this.sharedCacheContext) {
+      // L2: Check shared cache first (only if configured and not skipped)
+      if (this.sharedCacheContext && !shouldSkipSharedCache) {
         const cachedData = await this.getFromSharedCache();
         if (cachedData !== CACHE_MISS) {
           // L2 hit: populate L1 and return

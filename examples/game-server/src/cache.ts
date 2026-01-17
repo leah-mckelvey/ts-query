@@ -18,7 +18,8 @@ interface CacheEntry {
 
 export class InMemoryAdapter implements SharedCacheAdapter {
   private store = new Map<string, CacheEntry>();
-  private cleanupInterval: ReturnType<typeof setInterval>;
+  // Use union type for cross-environment compatibility (Node.js vs browser)
+  private cleanupInterval: NodeJS.Timeout | number;
 
   constructor() {
     // Periodic cleanup of expired entries
