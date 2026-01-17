@@ -141,7 +141,10 @@ export class Query<TData = unknown, TError = Error> {
         } catch (parseError) {
           // Malformed or corrupted cache entry - log separately for diagnosis
           // This could indicate data corruption, version mismatch, or tampering
-          if (process.env.NODE_ENV !== 'production') {
+          if (
+            typeof process !== 'undefined' &&
+            process.env?.NODE_ENV !== 'production'
+          ) {
             console.warn(
               `[ts-query] Shared cache parse failed for key "${this.sharedCacheContext.key}": ` +
                 `cached data is malformed or corrupted`,
@@ -153,7 +156,10 @@ export class Query<TData = unknown, TError = Error> {
       }
     } catch (adapterError) {
       // Shared cache adapter errors (network, connection, etc.) should not break the fetch flow
-      if (process.env.NODE_ENV !== 'production') {
+      if (
+        typeof process !== 'undefined' &&
+        process.env?.NODE_ENV !== 'production'
+      ) {
         console.warn(
           `[ts-query] Shared cache read failed for key "${this.sharedCacheContext.key}":`,
           adapterError,
@@ -180,7 +186,10 @@ export class Query<TData = unknown, TError = Error> {
     } catch (serializationError) {
       // Data cannot be serialized (circular refs, BigInt, etc.)
       // Skip writing to shared cache - will fall back to L3 on next fetch
-      if (process.env.NODE_ENV !== 'production') {
+      if (
+        typeof process !== 'undefined' &&
+        process.env?.NODE_ENV !== 'production'
+      ) {
         console.warn(
           `[ts-query] Shared cache write skipped for key "${this.sharedCacheContext.key}": ` +
             `data cannot be JSON-serialized`,

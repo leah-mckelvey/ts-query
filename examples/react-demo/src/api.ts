@@ -131,7 +131,7 @@ export async function getLeaderboard(playerId?: string): Promise<{
   cachedAt: number;
 }> {
   const url = playerId
-    ? `${API_BASE}/leaderboard?playerId=${playerId}`
+    ? `${API_BASE}/leaderboard?playerId=${encodeURIComponent(playerId)}`
     : `${API_BASE}/leaderboard`;
 
   const res = await fetchWithErrorHandling(url);
