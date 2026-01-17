@@ -76,7 +76,9 @@ export async function updatePlayer(
   record.state = {
     ...record.state,
     ...updates,
-    playerId, // ensure these can't be overwritten
+    // Immutable fields - ensure these can't be overwritten by runtime payload
+    playerId,
+    displayName: record.state.displayName,
     createdAt: record.state.createdAt,
   };
 

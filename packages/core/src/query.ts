@@ -6,6 +6,13 @@ import type {
 } from './types';
 
 /**
+ * Unique sentinel symbol to distinguish "cache miss" from "cache returned null".
+ * This ensures that legitimate null values in the cache are not treated as misses.
+ */
+const CACHE_MISS = Symbol('CACHE_MISS');
+type CacheMiss = typeof CACHE_MISS;
+
+/**
  * Context for shared cache (L2) operations, passed from QueryClient.
  */
 export interface SharedCacheContext {
@@ -110,10 +117,12 @@ export class Query<TData = unknown, TError = Error> {
 
   /**
    * Try to get data from the shared cache (L2).
-   * Returns the parsed data if found, or null if not found or on error.
+   * Returns the parsed data if found, or CACHE_MISS sentinel if not found or on error.
+   * Using a unique symbol ensures that legitimate null/undefined values are not
+   * confused with cache misses.
    */
-  private async getFromSharedCache(): Promise<TData | null> {
-    if (!this.sharedCacheContext) return null;
+  private async getFromSharedCache(): Promise<TData | CacheMiss> {
+    if (!this.sharedCacheContext) return CACHE_MISS;
 
     try {
       const cached = await this.sharedCacheContext.adapter.get(
@@ -126,7 +135,7 @@ export class Query<TData = unknown, TError = Error> {
       // Shared cache errors should not break the fetch flow
       // Silently fall through to L3
     }
-    return null;
+    return CACHE_MISS;
   }
 
   /**
@@ -152,7 +161,7 @@ export class Query<TData = unknown, TError = Error> {
       // L2: Check shared cache first (only if configured)
       if (this.sharedCacheContext) {
         const cachedData = await this.getFromSharedCache();
-        if (cachedData !== null) {
+        if (cachedData !== CACHE_MISS) {
           // L2 hit: populate L1 and return
           this.retryCount = 0;
           this.updateState({

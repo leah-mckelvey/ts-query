@@ -70,8 +70,8 @@ export class QueryClient {
       const key = this.getQueryKey(queryKey);
       const query = this.queries.get(key);
       query?.invalidate();
-      // Also invalidate in shared cache
-      this.sharedCacheConfig?.adapter.delete(key);
+      // Also invalidate in shared cache (fire-and-forget, errors are swallowed)
+      this.sharedCacheConfig?.adapter.delete(key).catch(() => {});
     } else {
       // Invalidate all queries
       this.queries.forEach((query) => query.invalidate());
@@ -85,8 +85,8 @@ export class QueryClient {
       const query = this.queries.get(key);
       query?.destroy();
       this.queries.delete(key);
-      // Also remove from shared cache
-      this.sharedCacheConfig?.adapter.delete(key);
+      // Also remove from shared cache (fire-and-forget, errors are swallowed)
+      this.sharedCacheConfig?.adapter.delete(key).catch(() => {});
     } else {
       // Remove all queries
       this.queries.forEach((query) => query.destroy());
