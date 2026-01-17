@@ -1,9 +1,22 @@
 import { Query } from './query';
 import { Mutation } from './mutation';
-import type { QueryKey, QueryOptions, MutationOptions } from './types';
+import type {
+  QueryKey,
+  QueryOptions,
+  MutationOptions,
+  QueryClientConfig,
+  SharedCacheConfig,
+} from './types';
+
+const DEFAULT_SHARED_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export class QueryClient {
   private queries = new Map<string, Query<unknown, unknown>>();
+  private sharedCacheConfig?: SharedCacheConfig;
+
+  constructor(config?: QueryClientConfig) {
+    this.sharedCacheConfig = config?.sharedCache;
+  }
 
   private getQueryKey(key: QueryKey): string {
     return typeof key === 'string' ? key : JSON.stringify(key);
@@ -17,27 +30,57 @@ export class QueryClient {
     let query = this.queries.get(key) as Query<TData, TError> | undefined;
 
     if (!query) {
-      query = new Query<TData, TError>(options, () => {
-        // Only remove if this is still the active instance for this key.
-        const current = this.queries.get(key);
-        if (current === (query as unknown as Query<unknown, unknown>)) {
-          this.queries.delete(key);
-        }
-      });
+      // Determine shared cache TTL: query-level override > client-level default > global default
+      const sharedCacheTtl =
+        options.sharedCacheTtl ??
+        this.sharedCacheConfig?.defaultTtl ??
+        DEFAULT_SHARED_CACHE_TTL;
+
+      query = new Query<TData, TError>(
+        options,
+        () => {
+          // Only remove if this is still the active instance for this key.
+          const current = this.queries.get(key);
+          if (current === (query as unknown as Query<unknown, unknown>)) {
+            this.queries.delete(key);
+          }
+        },
+        // Pass shared cache context if configured and not skipped
+        options.skipSharedCache
+          ? undefined
+          : this.sharedCacheConfig?.adapter
+            ? {
+                adapter: this.sharedCacheConfig.adapter,
+                key,
+                ttl: sharedCacheTtl,
+              }
+            : undefined,
+      );
       this.queries.set(key, query as unknown as Query<unknown, unknown>);
     }
 
     return query;
   }
 
+  /**
+   * Invalidate queries, optionally clearing from shared cache as well.
+   */
   invalidateQueries(queryKey?: QueryKey): void {
     if (queryKey) {
       const key = this.getQueryKey(queryKey);
       const query = this.queries.get(key);
       query?.invalidate();
+      // Also invalidate in shared cache (fire-and-forget, errors are swallowed)
+      this.sharedCacheConfig?.adapter.delete(key).catch(() => {});
     } else {
-      // Invalidate all queries
+      // Invalidate all in-memory queries for this client instance (L1 cache).
       this.queries.forEach((query) => query.invalidate());
+      // Important: We intentionally do NOT clear the entire shared cache (L2) here because:
+      // 1. The shared cache may be used by multiple QueryClient instances across processes/services
+      // 2. A "clear all" from a single client could unexpectedly evict data other clients rely on
+      // 3. Each Query's invalidate() already skips L2 on refetch via skipSharedCacheOnNextFetch
+      // If global L2 eviction is needed, it should be done via direct adapter access or an
+      // explicit higher-level operation that coordinates across all affected clients.
     }
   }
 
@@ -47,6 +90,8 @@ export class QueryClient {
       const query = this.queries.get(key);
       query?.destroy();
       this.queries.delete(key);
+      // Also remove from shared cache (fire-and-forget, errors are swallowed)
+      this.sharedCacheConfig?.adapter.delete(key).catch(() => {});
     } else {
       // Remove all queries
       this.queries.forEach((query) => query.destroy());
