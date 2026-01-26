@@ -10,8 +10,8 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
     },
-  },
-  resolve: {
+    // Mock react-native for testing - only ui-native package imports from react-native
+    // Other packages don't use react-native, so this alias won't mask any issues
     alias: {
       'react-native': path.resolve(
         __dirname,

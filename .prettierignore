@@ -4,4 +4,7 @@ storybook-static
 dist
 packages/**/dist
 examples/**/dist
+examples/react-native-demo/ios
+examples/react-native-demo/android
+examples/react-native-demo/.expo
 

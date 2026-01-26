@@ -16,6 +16,15 @@ export type {
   ButtonColorScheme,
 } from './Button';
 
+export { Card } from './Card';
+export type {
+  CardRootProps,
+  CardHeaderProps,
+  CardBodyProps,
+  CardFooterProps,
+  CardVariant,
+} from './Card';
+
 // Tokens
 export {
   space,

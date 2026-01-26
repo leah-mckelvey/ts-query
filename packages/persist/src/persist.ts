@@ -39,6 +39,7 @@ export function createPersistStore<TState>(
   } = options;
 
   let hasHydrated = false;
+  let writePromise: Promise<void> = Promise.resolve();
 
   // Serialize state for storage
   const serialize = (state: TState): string => {
@@ -64,15 +65,21 @@ export function createPersistStore<TState>(
   };
 
   // Persist current state to storage (hoisted function for circular reference)
+  // Uses a write queue to ensure writes complete in order
   async function persistState(): Promise<void> {
-    const state = baseStore.getState();
-    const serialized = serialize(state);
-    await storage.setItem(name, serialized);
+    // Chain writes to ensure ordering - each write waits for the previous
+    writePromise = writePromise.then(async () => {
+      const state = baseStore.getState();
+      const serialized = serialize(state);
+      await storage.setItem(name, serialized);
+    });
+    await writePromise;
   }
 
   // Rehydrate state from storage (hoisted function for circular reference)
   async function rehydrate(): Promise<void> {
-    const onRehydrateCallback = onRehydrateStorage?.(undefined);
+    // Pass current state to onRehydrateStorage so users can observe pre-hydration state
+    const onRehydrateCallback = onRehydrateStorage?.(baseStore.getState());
 
     try {
       const stored = await storage.getItem(name);

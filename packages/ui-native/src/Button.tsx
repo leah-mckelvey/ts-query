@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import type { PressableProps, ViewStyle, TextStyle } from 'react-native';
 import { Text } from './Text';
 import { colors, radius, space, fontSize } from './tokens';
@@ -19,6 +19,8 @@ export interface ButtonProps extends Omit<PressableProps, 'style'> {
   children: string;
   /** Disabled state */
   disabled?: boolean;
+  /** Loading state - shows spinner and disables button */
+  loading?: boolean;
   /** Full width */
   fullWidth?: boolean;
   /** Custom style */
@@ -99,7 +101,7 @@ const COLOR_CONFIG: Record<ButtonColorScheme, ColorConfig> = {
  * ```tsx
  * <Button onPress={handlePress}>Click Me</Button>
  * <Button variant="outline" colorScheme="red">Delete</Button>
- * <Button size="lg" fullWidth>Submit</Button>
+ * <Button size="lg" fullWidth loading>Submit</Button>
  * ```
  */
 export const Button: React.FC<ButtonProps> = ({
@@ -108,12 +110,14 @@ export const Button: React.FC<ButtonProps> = ({
   colorScheme = 'blue',
   children,
   disabled = false,
+  loading = false,
   fullWidth = false,
   style,
   ...rest
 }) => {
   const sizeConfig = SIZE_CONFIG[size];
   const colorConfig = COLOR_CONFIG[colorScheme];
+  const isDisabled = disabled || loading;
 
   const getButtonStyle = useCallback(
     (pressed: boolean): ViewStyle => {
@@ -123,7 +127,8 @@ export const Button: React.FC<ButtonProps> = ({
         borderRadius: sizeConfig.borderRadius,
         alignItems: 'center',
         justifyContent: 'center',
-        opacity: disabled ? 0.5 : 1,
+        flexDirection: 'row',
+        opacity: isDisabled ? 0.5 : 1,
         borderWidth: variant === 'outline' ? 1 : 0,
         borderColor: variant === 'outline' ? colorConfig.border : 'transparent',
       };
@@ -140,7 +145,7 @@ export const Button: React.FC<ButtonProps> = ({
 
       return StyleSheet.flatten([base, style]);
     },
-    [variant, sizeConfig, colorConfig, disabled, fullWidth, style],
+    [variant, sizeConfig, colorConfig, isDisabled, fullWidth, style],
   );
 
   const textStyle: TextStyle = {
@@ -149,14 +154,24 @@ export const Button: React.FC<ButtonProps> = ({
     color: variant === 'solid' ? colorConfig.textContrast : colorConfig.text,
   };
 
+  const spinnerColor =
+    variant === 'solid' ? colorConfig.textContrast : colorConfig.text;
+
   return (
     <Pressable
-      disabled={disabled}
+      disabled={isDisabled}
       style={({ pressed }) => getButtonStyle(pressed)}
       accessibilityRole="button"
-      accessibilityState={{ disabled }}
+      accessibilityState={{ disabled: isDisabled }}
       {...rest}
     >
+      {loading && (
+        <ActivityIndicator
+          size="small"
+          color={spinnerColor}
+          style={{ marginRight: space[2] }}
+        />
+      )}
       <Text style={textStyle}>{children}</Text>
     </Pressable>
   );

@@ -10,10 +10,10 @@
 
 import React, { memo, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Card } from '@ts-query/ui-native';
 import type { Todo, TodoId } from '../types';
 import { getStatusLabel } from '../types';
 import { useTheme } from '../contexts';
-import { Card } from './Card';
 
 // ============================================================================
 // Types
