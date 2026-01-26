@@ -4,8 +4,7 @@
   "description": "A generic query client that works for different frameworks",
   "private": true,
   "workspaces": [
-    "packages/*",
-    "examples/*"
+    "packages/*"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",

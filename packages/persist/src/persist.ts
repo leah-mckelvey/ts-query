@@ -1,0 +1,138 @@
+import type { SetState, GetState } from '@ts-query/core';
+import { createStore } from '@ts-query/core';
+import type { PersistOptions, PersistedState, PersistStore } from './types';
+
+/**
+ * Creates a persisted store with automatic hydration and persistence
+ *
+ * @example
+ * ```ts
+ * import { createPersistStore } from '@ts-query/persist';
+ * import { createAsyncStorageAdapter } from '@ts-query/persist/storage/asyncStorage';
+ * import AsyncStorage from '@react-native-async-storage/async-storage';
+ *
+ * const store = createPersistStore(
+ *   (set) => ({
+ *     count: 0,
+ *     increment: () => set((s) => ({ count: s.count + 1 })),
+ *   }),
+ *   {
+ *     name: 'counter-storage',
+ *     storage: createAsyncStorageAdapter(AsyncStorage),
+ *   }
+ * );
+ * ```
+ */
+export function createPersistStore<TState>(
+  initializer: (set: SetState<TState>, get: GetState<TState>) => TState,
+  options: PersistOptions<TState>,
+): PersistStore<TState> {
+  const {
+    name,
+    storage,
+    partialize = (state) => state,
+    merge = (persisted, current) => ({ ...current, ...persisted }),
+    version = 0,
+    migrate,
+    onRehydrateStorage,
+    skipHydration = false,
+  } = options;
+
+  let hasHydrated = false;
+
+  // Serialize state for storage
+  const serialize = (state: TState): string => {
+    const persistedState: PersistedState<TState> = {
+      state: partialize(state),
+      version,
+    };
+    return JSON.stringify(persistedState);
+  };
+
+  // Deserialize state from storage
+  const deserialize = (str: string): PersistedState<TState> | null => {
+    try {
+      return JSON.parse(str) as PersistedState<TState>;
+    } catch {
+      return null;
+    }
+  };
+
+  // Clear persisted state
+  const clearStorage = async (): Promise<void> => {
+    await storage.removeItem(name);
+  };
+
+  // Persist current state to storage (hoisted function for circular reference)
+  async function persistState(): Promise<void> {
+    const state = baseStore.getState();
+    const serialized = serialize(state);
+    await storage.setItem(name, serialized);
+  }
+
+  // Rehydrate state from storage (hoisted function for circular reference)
+  async function rehydrate(): Promise<void> {
+    const onRehydrateCallback = onRehydrateStorage?.(undefined);
+
+    try {
+      const stored = await storage.getItem(name);
+
+      if (stored === null) {
+        hasHydrated = true;
+        onRehydrateCallback?.(baseStore.getState());
+        return;
+      }
+
+      const parsed = deserialize(stored);
+
+      if (parsed === null) {
+        hasHydrated = true;
+        onRehydrateCallback?.(baseStore.getState());
+        return;
+      }
+
+      let persistedState = parsed.state;
+
+      // Handle migrations if version changed
+      if (parsed.version !== version && migrate) {
+        persistedState = await migrate(parsed.state, parsed.version);
+      }
+
+      // Merge persisted state with current state
+      const currentState = baseStore.getState();
+      const mergedState = merge(persistedState, currentState);
+
+      baseStore.setState(mergedState, true);
+      hasHydrated = true;
+      onRehydrateCallback?.(mergedState);
+    } catch (error) {
+      hasHydrated = true;
+      onRehydrateCallback?.(undefined, error as Error);
+    }
+  }
+
+  // Create the base store
+  const baseStore = createStore<TState>((set, get) => {
+    // Wrap setState to persist on every change
+    const persistingSet: SetState<TState> = (partial, replace) => {
+      set(partial, replace);
+      // Persist after state update (fire and forget)
+      void persistState();
+    };
+
+    return initializer(persistingSet, get);
+  });
+
+  // Start hydration unless skipped
+  if (!skipHydration) {
+    void rehydrate();
+  }
+
+  return {
+    ...baseStore,
+    persist: persistState,
+    rehydrate,
+    clearStorage,
+    hasHydrated: () => hasHydrated,
+  };
+}
