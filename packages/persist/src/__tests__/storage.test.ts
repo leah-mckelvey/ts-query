@@ -4,16 +4,23 @@ import { createAsyncStorageAdapter } from '../storage/asyncStorage';
 import type { AsyncStorageStatic } from '../storage/asyncStorage';
 
 describe('createLocalStorageAdapter', () => {
+  // Track whether globals existed originally
+  const hadWindow = 'window' in global;
+  const hadLocalStorage = 'localStorage' in global;
   const originalWindow = global.window;
   const originalLocalStorage = global.localStorage;
 
   afterEach(() => {
-    // Restore original values
-    if (originalWindow) {
+    // Restore or delete globals based on their original state
+    if (hadWindow) {
       global.window = originalWindow;
+    } else {
+      delete (global as Record<string, unknown>).window;
     }
-    if (originalLocalStorage) {
+    if (hadLocalStorage) {
       global.localStorage = originalLocalStorage;
+    } else {
+      delete (global as Record<string, unknown>).localStorage;
     }
   });
 

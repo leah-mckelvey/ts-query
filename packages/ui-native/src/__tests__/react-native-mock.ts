@@ -12,13 +12,28 @@ interface RNStyle extends React.CSSProperties {
   marginVertical?: number;
 }
 
+// Style input can be a single style, an array of styles, or undefined
+type StyleInput = RNStyle | RNStyle[] | undefined | null;
+
+/**
+ * Flatten an array of styles into a single style object (like RN's StyleSheet.flatten)
+ */
+function flattenStyle(style: StyleInput): RNStyle {
+  if (!style) return {};
+  if (Array.isArray(style)) {
+    return style.reduce<RNStyle>((acc, s) => ({ ...acc, ...(s || {}) }), {});
+  }
+  return style;
+}
+
 /**
  * Convert React Native-specific style properties to DOM equivalents
  */
-function convertRNStyleToDOM(style: RNStyle | undefined): React.CSSProperties {
-  if (!style) return {};
+function convertRNStyleToDOM(style: StyleInput): React.CSSProperties {
+  const flatStyle = flattenStyle(style);
+  if (!flatStyle || Object.keys(flatStyle).length === 0) return {};
 
-  const result: React.CSSProperties = { ...style };
+  const result: React.CSSProperties = { ...flatStyle };
 
   // Convert paddingHorizontal to paddingLeft + paddingRight
   if ('paddingHorizontal' in result) {
@@ -65,10 +80,10 @@ function convertRNStyleToDOM(style: RNStyle | undefined): React.CSSProperties {
   return result;
 }
 
-// Mock View component
+// Mock View component - accepts style arrays like RN
 export const View = React.forwardRef<
   HTMLDivElement,
-  React.PropsWithChildren<{ style?: RNStyle; testID?: string }>
+  React.PropsWithChildren<{ style?: StyleInput; testID?: string }>
 >(({ children, style, testID, ...props }, ref) => {
   const domStyle = convertRNStyleToDOM(style);
   return React.createElement(
@@ -79,24 +94,28 @@ export const View = React.forwardRef<
 });
 View.displayName = 'View';
 
-// Mock Text component
+// Mock Text component - accepts style arrays like RN
 export const Text = React.forwardRef<
   HTMLSpanElement,
-  React.PropsWithChildren<{ style?: React.CSSProperties; testID?: string }>
+  React.PropsWithChildren<{ style?: StyleInput; testID?: string }>
 >(({ children, style, testID, ...props }, ref) => {
+  const domStyle = convertRNStyleToDOM(style);
   return React.createElement(
     'span',
-    { ref, style, 'data-testid': testID, ...props },
+    { ref, style: domStyle, 'data-testid': testID, ...props },
     children,
   );
 });
 Text.displayName = 'Text';
 
-// Mock Pressable component
+// Style callback type for Pressable
+type PressableStyleCallback = (state: { pressed: boolean }) => StyleInput;
+
+// Mock Pressable component - accepts style arrays and callbacks like RN
 export const Pressable = React.forwardRef<
   HTMLButtonElement,
   React.PropsWithChildren<{
-    style?: RNStyle | ((state: { pressed: boolean }) => RNStyle);
+    style?: StyleInput | PressableStyleCallback;
     onPress?: () => void;
     disabled?: boolean;
     testID?: string;

@@ -66,13 +66,19 @@ export function createPersistStore<TState>(
 
   // Persist current state to storage (hoisted function for circular reference)
   // Uses a write queue to ensure writes complete in order
+  // Catches errors inside the queue so one bad write doesn't break persistence permanently
   async function persistState(): Promise<void> {
     // Chain writes to ensure ordering - each write waits for the previous
-    writePromise = writePromise.then(async () => {
-      const state = baseStore.getState();
-      const serialized = serialize(state);
-      await storage.setItem(name, serialized);
-    });
+    writePromise = writePromise
+      .then(async () => {
+        const state = baseStore.getState();
+        const serialized = serialize(state);
+        await storage.setItem(name, serialized);
+      })
+      .catch((error) => {
+        // Log error but don't let it break the queue
+        console.warn('[persist] Failed to persist state:', error);
+      });
     await writePromise;
   }
 
