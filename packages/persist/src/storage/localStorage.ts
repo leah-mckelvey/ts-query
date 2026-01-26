@@ -6,8 +6,24 @@ import type { StorageAdapter } from '../types';
  */
 export function createLocalStorageAdapter(): StorageAdapter {
   // Check if we're in a browser environment with localStorage
-  const hasLocalStorage =
-    typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+  // Wrapped in try/catch because accessing localStorage can throw SecurityError
+  // in some browser privacy modes (e.g., Safari private browsing)
+  let hasLocalStorage = false;
+  try {
+    hasLocalStorage =
+      typeof window !== 'undefined' &&
+      typeof window.localStorage !== 'undefined' &&
+      window.localStorage !== null;
+    // Test that we can actually use it
+    if (hasLocalStorage) {
+      const testKey = '__persist_test__';
+      window.localStorage.setItem(testKey, testKey);
+      window.localStorage.removeItem(testKey);
+    }
+  } catch {
+    // localStorage is not available (SSR, privacy mode, SecurityError, etc.)
+    hasLocalStorage = false;
+  }
 
   if (!hasLocalStorage) {
     // In-memory fallback for SSR or environments without localStorage

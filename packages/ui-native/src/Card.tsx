@@ -11,7 +11,7 @@ export interface CardRootProps extends Omit<PressableProps, 'style'> {
   /** Card variant */
   readonly variant?: CardVariant;
   /** Press handler - if provided, card becomes pressable */
-  readonly onPress?: () => void;
+  readonly onPress?: PressableProps['onPress'];
   /** Custom style */
   readonly style?: ViewStyle;
   /** Test ID */

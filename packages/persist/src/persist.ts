@@ -39,6 +39,7 @@ export function createPersistStore<TState>(
   } = options;
 
   let hasHydrated = false;
+  let isHydrating = false;
   let writePromise: Promise<void> = Promise.resolve();
 
   // Serialize state for storage
@@ -84,6 +85,9 @@ export function createPersistStore<TState>(
 
   // Rehydrate state from storage (hoisted function for circular reference)
   async function rehydrate(): Promise<void> {
+    // Mark hydration as in progress to prevent persistence during rehydration
+    isHydrating = true;
+
     // Pass current state to onRehydrateStorage so users can observe pre-hydration state
     const onRehydrateCallback = onRehydrateStorage?.(baseStore.getState());
 
@@ -92,6 +96,7 @@ export function createPersistStore<TState>(
 
       if (stored === null) {
         hasHydrated = true;
+        isHydrating = false;
         onRehydrateCallback?.(baseStore.getState());
         return;
       }
@@ -100,6 +105,7 @@ export function createPersistStore<TState>(
 
       if (parsed === null) {
         hasHydrated = true;
+        isHydrating = false;
         onRehydrateCallback?.(baseStore.getState());
         return;
       }
@@ -118,6 +124,7 @@ export function createPersistStore<TState>(
 
       baseStore.setState(mergedState, true);
       hasHydrated = true;
+      isHydrating = false;
 
       // If we migrated, persist the new state with the updated version
       if (didMigrate) {
@@ -127,6 +134,7 @@ export function createPersistStore<TState>(
       onRehydrateCallback?.(mergedState);
     } catch (error) {
       hasHydrated = true;
+      isHydrating = false;
       onRehydrateCallback?.(undefined, error as Error);
     }
   }
@@ -137,7 +145,11 @@ export function createPersistStore<TState>(
     const persistingSet: SetState<TState> = (partial, replace) => {
       set(partial, replace);
       // Persist after state update (fire and forget)
-      void persistState();
+      // Skip automatic persistence while hydrating to prevent data loss
+      // (we might overwrite stored state before it's read/merged)
+      if (!isHydrating) {
+        void persistState();
+      }
     };
 
     return initializer(persistingSet, get);

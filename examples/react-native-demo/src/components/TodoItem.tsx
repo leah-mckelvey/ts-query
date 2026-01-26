@@ -34,7 +34,7 @@ const PriorityBadge = memo<{ priority: Todo['priority'] }>(
   function PriorityBadge({ priority }) {
     const theme = useTheme();
 
-    const getColor = () => {
+    const getColor = (): string => {
       switch (priority) {
         case 'high':
           return theme.colors.error;
@@ -42,6 +42,11 @@ const PriorityBadge = memo<{ priority: Todo['priority'] }>(
           return theme.colors.warning;
         case 'low':
           return theme.colors.success;
+        default: {
+          // Exhaustive check - this should never happen
+          const _exhaustive: never = priority;
+          return _exhaustive;
+        }
       }
     };
 

@@ -63,6 +63,11 @@ describe('createPersistStore', () => {
       { name: 'test-store', storage: mockStorage },
     );
 
+    // Wait for hydration to complete before making changes
+    // (persistence is skipped during hydration to prevent data loss)
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(store.hasHydrated()).toBe(true);
+
     store.getState().increment();
 
     // Wait for async persistence
