@@ -1,4 +1,4 @@
-import type { Store, StateInitializer } from '@ts-query/core';
+import type { Store } from '@ts-query/core';
 
 /**
  * Storage adapter interface - works with both sync (localStorage) and async (AsyncStorage) storage
@@ -84,11 +84,3 @@ export interface PersistStore<TState> extends Store<TState> {
   /** Check if store has been hydrated */
   hasHydrated: () => boolean;
 }
-
-/**
- * Persist middleware type - wraps StateInitializer
- */
-export type PersistMiddleware = <TState>(
-  initializer: StateInitializer<TState>,
-  options: PersistOptions<TState>,
-) => StateInitializer<TState>;

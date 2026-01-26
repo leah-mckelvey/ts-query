@@ -94,7 +94,8 @@ export function createPersistStore<TState>(
       let persistedState = parsed.state;
 
       // Handle migrations if version changed
-      if (parsed.version !== version && migrate) {
+      const didMigrate = parsed.version !== version && migrate;
+      if (didMigrate) {
         persistedState = await migrate(parsed.state, parsed.version);
       }
 
@@ -104,6 +105,12 @@ export function createPersistStore<TState>(
 
       baseStore.setState(mergedState, true);
       hasHydrated = true;
+
+      // If we migrated, persist the new state with the updated version
+      if (didMigrate) {
+        await persistState();
+      }
+
       onRehydrateCallback?.(mergedState);
     } catch (error) {
       hasHydrated = true;

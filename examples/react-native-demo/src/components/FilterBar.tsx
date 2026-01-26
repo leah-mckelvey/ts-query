@@ -17,7 +17,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../contexts';
-import { useFilters, useTodoActions } from '../hooks';
+import { useFilters, useFilterTransition } from '../hooks';
 import type { StatusFilter, PriorityFilter } from '../types';
 
 // ============================================================================
@@ -71,11 +71,15 @@ const Chip = memo<ChipProps>(function Chip({ label, selected, onPress }) {
 // ============================================================================
 
 export const FilterBar = memo<FilterBarProps>(function FilterBar({
-  isPending = false,
+  isPending: externalIsPending = false,
 }) {
   const theme = useTheme();
   const filters = useFilters();
-  const { setFilters } = useTodoActions();
+  const { updateFilters, isPending: transitionIsPending } =
+    useFilterTransition();
+
+  // Combine external pending state with transition pending state
+  const isPending = externalIsPending || transitionIsPending;
 
   const statusOptions: { label: string; value: StatusFilter }[] = [
     { label: 'All', value: 'all' },
@@ -93,16 +97,16 @@ export const FilterBar = memo<FilterBarProps>(function FilterBar({
 
   const handleStatusChange = useCallback(
     (status: StatusFilter) => {
-      setFilters({ status });
+      updateFilters({ status });
     },
-    [setFilters],
+    [updateFilters],
   );
 
   const handlePriorityChange = useCallback(
     (priority: PriorityFilter) => {
-      setFilters({ priority });
+      updateFilters({ priority });
     },
-    [setFilters],
+    [updateFilters],
   );
 
   return (

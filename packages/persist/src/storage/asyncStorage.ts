@@ -18,19 +18,16 @@ export interface AsyncStorageStatic {
  * @example
  * ```tsx
  * import AsyncStorage from '@react-native-async-storage/async-storage';
- * import { createAsyncStorageAdapter, persist } from '@ts-query/persist';
- * import { createStore } from '@ts-query/core';
+ * import { createAsyncStorageAdapter, createPersistStore } from '@ts-query/persist';
  *
  * const storage = createAsyncStorageAdapter(AsyncStorage);
  *
- * const store = createStore(
- *   persist(
- *     (set) => ({
- *       count: 0,
- *       increment: () => set((s) => ({ count: s.count + 1 })),
- *     }),
- *     { name: 'counter-storage', storage }
- *   )
+ * const store = createPersistStore(
+ *   (set) => ({
+ *     count: 0,
+ *     increment: () => set((s) => ({ count: s.count + 1 })),
+ *   }),
+ *   { name: 'counter-storage', storage }
  * );
  * ```
  */

@@ -24,7 +24,6 @@ import {
   useTodoActions,
   useIsHydrated,
   useDeferredSearch,
-  useFilterTransition,
 } from '../hooks';
 import { useTheme } from '../contexts';
 import { TodoItem } from './TodoItem';
@@ -85,9 +84,6 @@ export function TodoList({ searchQuery, onSearchChange }: TodoListProps) {
 
   // useDeferredValue - prevents UI jank during rapid search typing
   const { deferredQuery, isStale } = useDeferredSearch(searchQuery);
-
-  // useTransition for filter changes
-  const { isPending } = useFilterTransition();
 
   // Filter by deferred search query for smoother UX
   const displayTodos = useMemo(() => {
@@ -162,7 +158,7 @@ export function TodoList({ searchQuery, onSearchChange }: TodoListProps) {
       </View>
 
       {/* Filter Bar */}
-      <FilterBar isPending={isPending} />
+      <FilterBar />
 
       {/* Todo List */}
       <FlatList

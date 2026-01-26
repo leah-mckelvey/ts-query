@@ -9,13 +9,7 @@
  * - Controlled component pattern
  */
 
-import React, {
-  createContext,
-  useContext,
-  forwardRef,
-  memo,
-  type ReactNode,
-} from 'react';
+import React, { createContext, forwardRef, memo, type ReactNode } from 'react';
 import { View, type ViewStyle, StyleSheet, Pressable } from 'react-native';
 import { useTheme } from '../contexts';
 
@@ -32,8 +26,6 @@ const CardContext = createContext<CardContextValue>({
   variant: 'default',
   isPressed: false,
 });
-
-const useCardContext = () => useContext(CardContext);
 
 // ============================================================================
 // Card Root Component
