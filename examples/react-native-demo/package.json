@@ -10,8 +10,9 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.1.2",
-    "@ts-query/persist": "workspace:*",
-    "@ts-query/ui-native": "workspace:*",
+    "@ts-query/core": "^1.0.0",
+    "@ts-query/persist": "^1.0.0",
+    "@ts-query/ui-native": "^1.0.0",
     "expo": "~52.0.0",
     "expo-asset": "^12.0.12",
     "expo-status-bar": "~2.0.0",
