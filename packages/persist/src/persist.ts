@@ -89,7 +89,20 @@ export function createPersistStore<TState>(
     isHydrating = true;
 
     // Pass current state to onRehydrateStorage so users can observe pre-hydration state
-    const onRehydrateCallback = onRehydrateStorage?.(baseStore.getState());
+    // Wrap in try-catch to ensure hydration flags are reset even if user callback throws
+    let onRehydrateCallback:
+      | ((state?: TState, error?: Error) => void)
+      | undefined;
+    try {
+      const result = onRehydrateStorage?.(baseStore.getState());
+      // Only assign if it's a function (filter out void returns)
+      if (typeof result === 'function') {
+        onRehydrateCallback = result;
+      }
+    } catch (error) {
+      // User's onRehydrateStorage callback threw during setup
+      console.warn('[persist] onRehydrateStorage callback threw:', error);
+    }
 
     try {
       const stored = await storage.getItem(name);
