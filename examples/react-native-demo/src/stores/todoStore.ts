@@ -1,33 +1,11 @@
 /**
- * Todo Store - Simple In-Memory Implementation
+ * Todo Store
  *
- * Demonstrates:
- * - Zustand-like store pattern (without external dependencies)
- * - Type-safe state management
- * - Actions as part of state
- * - Derived state computations
- *
- * This demo uses a simplified in-memory store to keep the example focused on
- * demonstrating the @ts-query/ui-native components and React Native patterns.
- * For persistence with AsyncStorage, see the @ts-query/persist package which
- * provides createPersistStore() and createAsyncStorageAdapter().
- *
- * Example with persistence:
- * @example
- * ```ts
- * import { createPersistStore, createAsyncStorageAdapter } from '@ts-query/persist';
- * import AsyncStorage from '@react-native-async-storage/async-storage';
- *
- * const todoStore = createPersistStore<TodoState>(
- *   (set) => ({ ... }),
- *   {
- *     name: 'todo-storage',
- *     storage: createAsyncStorageAdapter(AsyncStorage),
- *   }
- * );
- * ```
+ * Demonstrates using @ts-query/core's createStore for state management.
+ * For persistence with AsyncStorage, use @ts-query/persist's createPersistStore.
  */
 
+import { createStore } from '@ts-query/core';
 import type {
   Todo,
   TodoId,
@@ -37,45 +15,6 @@ import type {
   TodoStatus,
 } from '../types';
 import { generateTodoId } from '../types';
-
-// ============================================================================
-// Simple Store Implementation (zustand-like pattern)
-// ============================================================================
-
-type SetState<T> = (partial: Partial<T> | ((state: T) => Partial<T>)) => void;
-type GetState<T> = () => T;
-type Listener = () => void;
-
-interface Store<T> {
-  getState: GetState<T>;
-  setState: SetState<T>;
-  subscribe: (listener: Listener) => () => void;
-}
-
-function createStore<T>(
-  initializer: (set: SetState<T>, get: GetState<T>) => T,
-): Store<T> {
-  let state: T;
-  const listeners = new Set<Listener>();
-
-  const getState: GetState<T> = () => state;
-
-  const setState: SetState<T> = (partial) => {
-    const nextPartial =
-      typeof partial === 'function' ? partial(state) : partial;
-    state = { ...state, ...nextPartial };
-    listeners.forEach((listener) => listener());
-  };
-
-  const subscribe = (listener: Listener): (() => void) => {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
-  };
-
-  state = initializer(setState, getState);
-
-  return { getState, setState, subscribe };
-}
 
 // ============================================================================
 // Store State Type
