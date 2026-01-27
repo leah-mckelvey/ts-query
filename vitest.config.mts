@@ -10,12 +10,15 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
     },
-    // Mock react-native for testing - only ui-native package imports from react-native
-    // Other packages don't use react-native, so this alias won't mask any issues
+    // Mock react-native for testing
+    // Note: This alias applies globally to all packages. Currently only ui-native
+    // imports from react-native, but if other packages add RN imports in the future,
+    // they will also use this mock. Consider package-specific vitest configs if
+    // different packages need different mocking strategies.
     alias: {
       'react-native': path.resolve(
         __dirname,
-        'packages/ui-native/src/__tests__/react-native-mock.ts',
+        'packages/ui-native/src/__tests__/react-native-mock.tsx',
       ),
     },
   },

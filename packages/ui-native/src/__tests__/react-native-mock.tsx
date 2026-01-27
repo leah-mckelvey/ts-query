@@ -86,10 +86,10 @@ export const View = React.forwardRef<
   React.PropsWithChildren<{ style?: StyleInput; testID?: string }>
 >(({ children, style, testID, ...props }, ref) => {
   const domStyle = convertRNStyleToDOM(style);
-  return React.createElement(
-    'div',
-    { ref, style: domStyle, 'data-testid': testID, ...props },
-    children,
+  return (
+    <div ref={ref} style={domStyle} data-testid={testID} {...props}>
+      {children}
+    </div>
   );
 });
 View.displayName = 'View';
@@ -100,10 +100,10 @@ export const Text = React.forwardRef<
   React.PropsWithChildren<{ style?: StyleInput; testID?: string }>
 >(({ children, style, testID, ...props }, ref) => {
   const domStyle = convertRNStyleToDOM(style);
-  return React.createElement(
-    'span',
-    { ref, style: domStyle, 'data-testid': testID, ...props },
-    children,
+  return (
+    <span ref={ref} style={domStyle} data-testid={testID} {...props}>
+      {children}
+    </span>
   );
 });
 Text.displayName = 'Text';
@@ -139,19 +139,19 @@ export const Pressable = React.forwardRef<
     const resolvedStyle =
       typeof style === 'function' ? style({ pressed: false }) : style;
     const domStyle = convertRNStyleToDOM(resolvedStyle);
-    return React.createElement(
-      'button',
-      {
-        ref,
-        style: domStyle,
-        onClick: onPress,
-        disabled,
-        'data-testid': testID,
-        role: accessibilityRole,
-        'aria-disabled': accessibilityState?.disabled,
-        ...props,
-      },
-      children,
+    return (
+      <button
+        ref={ref}
+        style={domStyle}
+        onClick={onPress}
+        disabled={disabled}
+        data-testid={testID}
+        role={accessibilityRole}
+        aria-disabled={accessibilityState?.disabled}
+        {...props}
+      >
+        {children}
+      </button>
     );
   },
 );

@@ -7,8 +7,25 @@
  * - Actions as part of state
  * - Derived state computations
  *
- * Note: This is a simplified store for demo purposes.
- * In production, you'd use @ts-query/persist with AsyncStorage.
+ * This demo uses a simplified in-memory store to keep the example focused on
+ * demonstrating the @ts-query/ui-native components and React Native patterns.
+ * For persistence with AsyncStorage, see the @ts-query/persist package which
+ * provides createPersistStore() and createAsyncStorageAdapter().
+ *
+ * Example with persistence:
+ * @example
+ * ```ts
+ * import { createPersistStore, createAsyncStorageAdapter } from '@ts-query/persist';
+ * import AsyncStorage from '@react-native-async-storage/async-storage';
+ *
+ * const todoStore = createPersistStore<TodoState>(
+ *   (set) => ({ ... }),
+ *   {
+ *     name: 'todo-storage',
+ *     storage: createAsyncStorageAdapter(AsyncStorage),
+ *   }
+ * );
+ * ```
  */
 
 import type {
