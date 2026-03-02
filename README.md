@@ -1,29 +1,48 @@
 # ts-query
 
-A framework-agnostic query client for managing async state, inspired by TanStack Query. Works seamlessly with React, Mithril, and potentially any other framework.
+A from-scratch query client and state management library in pure TypeScript.
+Framework-agnostic core with adapters for React, Mithril, and React Native.
+Used isomorphically — the same `QueryClient` manages L1/L2/L3 tiered caching
+on an Express backend and drives UI state on the frontend.
 
-## Features
+## What's in Here
 
-- 🎯 **Framework Agnostic Core** - Pure TypeScript core with zero dependencies
-- ⚛️ **React Support** - First-class React hooks integration
-- 🔷 **Mithril Support** - Native Mithril integration with automatic redraws
-- 📦 **Smart Caching** - Automatic caching with configurable stale times
-- 🔄 **Retries & Invalidation** - Configurable retry logic and explicit refetch via invalidation
-- 🎨 **TypeScript First** - Full type safety and inference
-- 🪶 **Lightweight** - Minimal bundle size with tree-shaking support
-
-## Architecture
+This is a monorepo containing **7 packages** and **5 example apps** that
+dogfood every package:
 
 ```
-ts-query/
-├── packages/
-│   ├── core/           # Framework-agnostic query client
-│   ├── react/          # React adapter (hooks)
-│   └── mithril/        # Mithril adapter
-└── examples/
-    ├── react-demo/     # React demo app
-    └── mithril-demo/   # Mithril demo app
+packages/
+├── core/            # QueryClient, Query, Mutation, createStore (zero deps)
+├── react/           # React adapter — useQuery, useMutation, useStore hooks
+├── mithril/         # Mithril adapter — lifecycle-safe components
+├── ui-react/        # Design-token-driven React component library
+├── ui-mithril/      # Design-token-driven Mithril component library
+├── ui-native/       # React Native component library
+└── persist/         # Persistence layer (WIP)
+
+examples/
+├── react-demo/          # React app — data fetching + mutations + store
+├── react-native-demo/   # React Native app — full incremental game client
+├── mithril-demo/        # Mithril app — queries, mutations, store
+├── mithril-dashboard/   # Production-style Mithril dashboard with MSW mocks
+└── game-server/         # Express API using QueryClient for server-side
+                         # L1/L2/L3 tiered caching (same core as frontend)
 ```
+
+### Key Design Decisions
+
+- **The core has zero framework dependencies.** All caching, retry,
+  invalidation, subscription, and state management logic is pure TypeScript.
+  Adding a new framework adapter is ~50 lines of glue code.
+- **`createStore` is a Zustand-equivalent** built into the core. Same
+  `set`/`get`/`subscribe` API, same selector + equality patterns — works with
+  any adapter.
+- **The `QueryClient` works on the server too.** The game server uses it as a
+  tiered cache (in-process L1 → shared L2 → database L3) with the same API
+  the frontend uses for data fetching. One abstraction, both sides of the
+  stack.
+- **UI component libraries use design tokens directly**, not theme context.
+  Same component API across React, Mithril, and React Native.
 
 ## Installation
 
@@ -231,63 +250,32 @@ npm run build
 npm run dev
 ```
 
-## Why ts-query?
+## Why Build This?
 
-This project demonstrates how to build framework-agnostic infrastructure that can work across different UI libraries. The core principles:
+At my last role we ran Mithril — a fast, minimal framework with a
+chronically undersupported ecosystem. Every time we needed async state
+management or a component library, the options were either nonexistent or
+tightly coupled to React. I kept writing one-off solutions and realized the
+actual fix was an architecture where the framework doesn't matter.
 
-1. **Separation of Concerns** - Business logic (core) is completely separate from framework integration (adapters)
-2. **Observable Pattern** - Core uses a simple subscriber pattern that any framework can hook into
-3. **Type Safety** - Full TypeScript support with proper type inference
-4. **Best Practices** - Follows modern JavaScript/TypeScript patterns and conventions
+That's what ts-query is. The core owns all the hard problems — caching,
+retries, invalidation, subscriptions, state management — in pure TypeScript
+with zero deps. Adding a new framework means writing a thin adapter, not
+forking a library. The same pattern extends to the server: plug in a
+`SharedCacheAdapter` and the `QueryClient` becomes a tiered cache for any
+backend. Your frontend stack literally doesn't matter. I will have it
+running with production-grade infrastructure inside a day.
 
-This approach allows teams to:
+## Roadmap
 
-- Share logic across different frameworks
-- Migrate between frameworks without rewriting business logic
-- Maintain consistency in data fetching patterns
-- Reduce bundle size by sharing core logic
-
-## Comparison with TanStack Query
-
-ts-query is inspired by TanStack Query but simplified for educational purposes:
-
-| Feature                        | ts-query       | TanStack Query                     |
-| ------------------------------ | -------------- | ---------------------------------- |
-| Framework Support              | React, Mithril | React, Vue, Solid, Svelte, Angular |
-| Bundle Size                    | ~5KB           | ~15KB                              |
-| Query Invalidation             | ✅             | ✅                                 |
-| Automatic Refetching (retries) | ✅             | ✅                                 |
-| Optimistic Updates             | ❌             | ✅                                 |
-| Infinite Queries               | ❌             | ✅                                 |
-| Devtools                       | ❌             | ✅                                 |
-| SSR Support                    | ❌             | ✅                                 |
-
-## Future Work
-
-ts-query is intentionally small and focused today. The longer-term goal is to
-grow towards practical parity with TanStack Query's major features while
-keeping the core implementation understandable.
-
-Some concrete areas that are currently not implemented but would be natural
-extensions:
-
-- **Cancellation support** – allow `queryFn` to accept an `AbortSignal` and
-  propagate cancellation from the core.
-- **Window-focus refetching** – add an optional flag to refetch active queries
-  when the window regains focus.
-- **Additional refetch triggers** – e.g. refetch on network reconnect or
-  simple polling intervals.
-- **Infinite & paginated queries** – helpers for cursor- and page-based lists.
-- **Optimistic updates & rollback** – first-class patterns for local updates
-  around mutations.
-- **Devtools / debugging** – lightweight inspector for query cache state.
-- **SSR hooks** – APIs for prefetching and hydrating queries in server-
-  rendered apps.
+- **Cancellation support** — `AbortSignal` propagation from the core to `queryFn`
+- **Window-focus & network-reconnect refetching**
+- **Polling intervals**
+- **Infinite & paginated queries**
+- **Optimistic updates & rollback**
+- **Devtools**
+- **SSR prefetch & hydration**
 
 ## License
 
 MIT
-
-## Author
-
-Built as a demonstration of cross-platform library architecture and modern frontend infrastructure patterns.

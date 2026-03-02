@@ -24,6 +24,11 @@ export interface SharedCacheAdapter {
   set: (key: string, value: string, ttlMs: number) => Promise<void>;
   /** Delete a value from the shared cache. */
   delete: (key: string) => Promise<void>;
+  /**
+   * Clear all entries from the shared cache.
+   * Optional - primarily used for testing to reset state between tests.
+   */
+  clear?: () => Promise<void>;
 }
 
 /**

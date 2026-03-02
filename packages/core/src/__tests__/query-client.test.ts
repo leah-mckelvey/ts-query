@@ -613,4 +613,110 @@ describe('QueryClient with SharedCache (L2)', () => {
     // L2 set should NOT be called because BigInt can't be serialized
     expect(adapter.set).not.toHaveBeenCalled();
   });
+
+  it('should clear L1 queries when clear() is called', async () => {
+    const adapter = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    const query1 = client.getQuery({
+      queryKey: 'test1',
+      queryFn,
+    });
+
+    const query2 = client.getQuery({
+      queryKey: 'test2',
+      queryFn,
+    });
+
+    await query1.fetch();
+    await query2.fetch();
+
+    await client.clear();
+
+    // After clear, getting the same queries should return new instances
+    const newQuery1 = client.getQuery({
+      queryKey: 'test1',
+      queryFn,
+    });
+
+    const newQuery2 = client.getQuery({
+      queryKey: 'test2',
+      queryFn,
+    });
+
+    expect(newQuery1).not.toBe(query1);
+    expect(newQuery2).not.toBe(query2);
+  });
+
+  it('should clear L2 shared cache when adapter has clear method', async () => {
+    const clearFn = vi.fn().mockResolvedValue(undefined);
+    const adapter = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+      clear: clearFn,
+    };
+
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    await client.clear();
+
+    expect(clearFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('should work without L2 clear when adapter does not have clear method', async () => {
+    const adapter = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+      // No clear method
+    };
+
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue('data');
+    client.getQuery({ queryKey: 'test', queryFn });
+
+    // Should not throw even without clear method
+    await expect(client.clear()).resolves.toBeUndefined();
+  });
+
+  it('should silently ignore L2 clear errors', async () => {
+    const clearFn = vi.fn().mockRejectedValue(new Error('Cache clear failed'));
+    const adapter = {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+      clear: clearFn,
+    };
+
+    const client = new QueryClient({
+      sharedCache: { adapter },
+    });
+
+    const queryFn = vi.fn().mockResolvedValue('data');
+    const query = client.getQuery({ queryKey: 'test', queryFn });
+    await query.fetch();
+
+    // Should not throw even when clear fails
+    await expect(client.clear()).resolves.toBeUndefined();
+    expect(clearFn).toHaveBeenCalledTimes(1);
+
+    // L1 should still be cleared
+    const newQuery = client.getQuery({ queryKey: 'test', queryFn });
+    expect(newQuery).not.toBe(query);
+  });
 });
