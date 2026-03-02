@@ -105,7 +105,23 @@ export class QueryClient {
     return new Mutation<TData, TVariables, TError>(options);
   }
 
-  clear(): void {
+  /**
+   * Clear all queries from the in-memory cache (L1) and optionally clear the shared cache (L2).
+   * This is primarily useful for testing to reset state between tests.
+   *
+   * @returns A promise that resolves when the clear operation is complete.
+   *          If the shared cache adapter doesn't support clear, only L1 is cleared.
+   */
+  async clear(): Promise<void> {
     this.removeQueries();
+
+    // Clear L2 shared cache if adapter supports it
+    if (this.sharedCacheConfig?.adapter.clear) {
+      try {
+        await this.sharedCacheConfig.adapter.clear();
+      } catch {
+        // Silently ignore shared cache clear errors
+      }
+    }
   }
 }
