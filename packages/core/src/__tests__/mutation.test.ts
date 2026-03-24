@@ -150,4 +150,77 @@ describe('Mutation', () => {
 
     expect(subscriber).not.toHaveBeenCalled();
   });
+
+  it('should queue a second mutate call while the first is in flight', async () => {
+    let resolveFirst!: (value: string) => void;
+    const firstStarted = new Promise<void>((res) => {
+      resolveFirst = (v) => { res(); firstResolve(v); };
+    });
+    let firstResolve!: (value: string) => void;
+    const firstPromise = new Promise<string>((res) => { firstResolve = res; });
+
+    const mutationFn = vi.fn()
+      .mockImplementationOnce(() => { resolveFirst('first'); return firstPromise; })
+      .mockResolvedValueOnce('second');
+
+    const mutation = new Mutation({ mutationFn });
+
+    const p1 = mutation.mutate('a');
+    // While first is in flight, queue a second call
+    const p2 = mutation.mutate('b');
+
+    const [r1, r2] = await Promise.all([p1, p2]);
+
+    expect(r1).toBe('first');
+    expect(r2).toBe('second');
+    expect(mutationFn).toHaveBeenCalledTimes(2);
+    expect(mutationFn).toHaveBeenNthCalledWith(1, 'a');
+    expect(mutationFn).toHaveBeenNthCalledWith(2, 'b');
+  });
+
+  it('should process multiple queued calls in order', async () => {
+    const order: string[] = [];
+    const mutationFn = vi.fn().mockImplementation(async (v: string) => {
+      order.push(v);
+      return v;
+    });
+
+    const mutation = new Mutation({ mutationFn });
+
+    // Fire three calls — only the first executes immediately; the other two queue
+    const results = await Promise.all([
+      mutation.mutate('a'),
+      mutation.mutate('b'),
+      mutation.mutate('c'),
+    ]);
+
+    expect(results).toEqual(['a', 'b', 'c']);
+    expect(order).toEqual(['a', 'b', 'c']);
+  });
+
+  it('should clear the queue on reset', async () => {
+    let blockResolve!: () => void;
+    const blocked = new Promise<string>((res) => {
+      blockResolve = () => res('first');
+    });
+    const mutationFn = vi.fn().mockReturnValueOnce(blocked).mockResolvedValue('later');
+
+    const mutation = new Mutation({ mutationFn });
+
+    mutation.mutate('a'); // starts in-flight
+    const p2 = mutation.mutate('b'); // queued
+
+    // Reset immediately clears the queue and resets state
+    mutation.reset();
+    expect(mutation.state.status).toBe('idle');
+
+    blockResolve();
+
+    // p2 should never resolve since the queue was cleared before it ran
+    const timeout = new Promise<string>((_, rej) => setTimeout(() => rej(new Error('timeout')), 50));
+    await expect(Promise.race([p2, timeout])).rejects.toThrow('timeout');
+
+    // mutationFn was only called once (for 'a'), never for 'b'
+    expect(mutationFn).toHaveBeenCalledTimes(1);
+  });
 });

@@ -1,8 +1,15 @@
 import type { MutationOptions, MutationState, Subscriber } from './types';
 
+interface QueuedMutation<TData, TVariables> {
+  variables: TVariables;
+  resolve: (data: TData) => void;
+  reject: (error: unknown) => void;
+}
+
 export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
   private subscribers = new Set<Subscriber<MutationState<TData, TError>>>();
   private options: MutationOptions<TData, TVariables, TError>;
+  private queue: QueuedMutation<TData, TVariables>[] = [];
 
   state: MutationState<TData, TError> = {
     status: 'idle',
@@ -44,6 +51,15 @@ export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
   }
 
   async mutate(variables: TVariables): Promise<TData> {
+    if (this.state.isLoading) {
+      return new Promise<TData>((resolve, reject) => {
+        this.queue.push({ variables, resolve, reject });
+      });
+    }
+    return this.execute(variables);
+  }
+
+  private async execute(variables: TVariables): Promise<TData> {
     this.updateState({ status: 'loading' });
 
     try {
@@ -69,10 +85,16 @@ export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
       this.options.onSettled?.(undefined, err, variables);
 
       throw err;
+    } finally {
+      const next = this.queue.shift();
+      if (next) {
+        this.execute(next.variables).then(next.resolve, next.reject);
+      }
     }
   }
 
   reset(): void {
+    this.queue = [];
     this.state = {
       status: 'idle',
       data: undefined,
