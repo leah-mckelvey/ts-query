@@ -1,6 +1,6 @@
 {
   "name": "@ts-query/ui-mithril",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Mithril UI primitives (Box, Stack, Text, Heading, Button) for ts-query demos",
   "type": "module",
   "main": "dist/index.js",

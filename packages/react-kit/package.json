@@ -1,0 +1,33 @@
+{
+  "name": "@ts-query/react-kit",
+  "version": "1.0.0",
+  "description": "One-command React install for ts-query core, React adapter, and React UI kit",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "react",
+    "query",
+    "state-management",
+    "ui"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leah-mckelvey/ts-query.git",
+    "directory": "packages/react-kit"
+  },
+  "bugs": {
+    "url": "https://github.com/leah-mckelvey/ts-query/issues"
+  },
+  "homepage": "https://github.com/leah-mckelvey/ts-query#readme",
+  "dependencies": {
+    "@ts-query/core": "^1.0.0",
+    "@ts-query/react": "^1.0.0",
+    "@ts-query/ui-react": "^1.0.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  }
+}

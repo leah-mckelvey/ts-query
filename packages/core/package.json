@@ -1,6 +1,6 @@
 {
   "name": "@ts-query/core",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Framework-agnostic query client core",
   "type": "module",
   "main": "dist/index.js",

@@ -1,0 +1,32 @@
+{
+  "name": "@ts-query/mithril-kit",
+  "version": "1.0.0",
+  "description": "One-command Mithril install for ts-query core, Mithril adapter, and Mithril UI kit",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "mithril",
+    "query",
+    "state-management",
+    "ui"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leah-mckelvey/ts-query.git",
+    "directory": "packages/mithril-kit"
+  },
+  "bugs": {
+    "url": "https://github.com/leah-mckelvey/ts-query/issues"
+  },
+  "homepage": "https://github.com/leah-mckelvey/ts-query#readme",
+  "dependencies": {
+    "@ts-query/core": "^1.0.0",
+    "@ts-query/mithril": "^1.0.0",
+    "@ts-query/ui-mithril": "^1.0.0"
+  },
+  "peerDependencies": {
+    "mithril": "^2.0.0"
+  }
+}
