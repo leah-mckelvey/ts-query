@@ -1,6 +1,6 @@
-export { QueryClientProvider, useQueryClient } from './context';
-export { useQuery } from './use-query';
-export { useMutation } from './use-mutation';
-export { useStore } from './use-store';
-export type { UseMutationResult } from './use-mutation';
-export type { QueryClientProviderProps } from './context';
+export { QueryClientProvider, useQueryClient } from './context.js';
+export { useQuery } from './use-query.js';
+export { useMutation } from './use-mutation.js';
+export { useStore } from './use-store.js';
+export type { UseMutationResult } from './use-mutation.js';
+export type { QueryClientProviderProps } from './context.js';

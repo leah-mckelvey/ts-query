@@ -1,7 +1,7 @@
-export { QueryClient } from './query-client';
-export { Query } from './query';
-export { Mutation } from './mutation';
-export { createStore } from './store';
+export { QueryClient } from './query-client.js';
+export { Query } from './query.js';
+export { Mutation } from './mutation.js';
+export { createStore } from './store.js';
 export type {
   QueryKey,
   QueryStatus,
@@ -13,11 +13,11 @@ export type {
   MutationOptions,
   MutationState,
   Subscriber,
-} from './types';
+} from './types.js';
 export type {
   Store,
   StoreListener,
   SetState,
   GetState,
   StateInitializer,
-} from './store';
+} from './store.js';

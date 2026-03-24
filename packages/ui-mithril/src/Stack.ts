@@ -1,5 +1,5 @@
 import m from 'mithril';
-import { Box, spaceToCss, type SpaceValue } from './Box';
+import { Box, spaceToCss, type SpaceValue } from './Box.js';
 
 export type StackDirection = 'row' | 'column';
 

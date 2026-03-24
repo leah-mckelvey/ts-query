@@ -1,6 +1,6 @@
 import React from 'react';
-import type { SpaceValue } from './Box';
-import { Box } from './Box';
+import type { SpaceValue } from './Box.js';
+import { Box } from './Box.js';
 
 export type StackDirection = 'row' | 'column';
 

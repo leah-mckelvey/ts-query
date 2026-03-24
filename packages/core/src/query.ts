@@ -3,7 +3,7 @@ import type {
   QueryState,
   Subscriber,
   SharedCacheAdapter,
-} from './types';
+} from './types.js';
 
 /**
  * Unique sentinel symbol to distinguish "cache miss" from "cache returned null".

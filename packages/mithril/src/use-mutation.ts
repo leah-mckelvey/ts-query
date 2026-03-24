@@ -1,6 +1,6 @@
 import m from 'mithril';
 import type { MutationOptions, MutationState, Mutation } from '@ts-query/core';
-import { getQueryClient } from './query-client-provider';
+import { getQueryClient } from './query-client-provider.js';
 
 export interface UseMutationResult<
   TData = unknown,

@@ -1,8 +1,8 @@
 import m from 'mithril';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryClient } from '@ts-query/core';
-import { setQueryClient } from '../query-client-provider';
-import { createMutationComponent, useMutation } from '../use-mutation';
+import { setQueryClient } from '../query-client-provider.js';
+import { createMutationComponent, useMutation } from '../use-mutation.js';
 
 describe('Mithril useMutation', () => {
   let container: HTMLElement;

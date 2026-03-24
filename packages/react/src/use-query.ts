@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import type { QueryOptions, QueryState } from '@ts-query/core';
-import { useQueryClient } from './context';
+import { useQueryClient } from './context.js';
 
 export function useQuery<TData = unknown, TError = Error>(
   options: QueryOptions<TData, TError>,

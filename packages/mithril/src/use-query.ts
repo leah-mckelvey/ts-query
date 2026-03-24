@@ -1,6 +1,6 @@
 import m from 'mithril';
 import type { QueryOptions, QueryState, Query } from '@ts-query/core';
-import { getQueryClient } from './query-client-provider';
+import { getQueryClient } from './query-client-provider.js';
 
 // WeakMap to store cleanup functions for queries
 // This avoids memory leaks and type safety issues with attaching to objects

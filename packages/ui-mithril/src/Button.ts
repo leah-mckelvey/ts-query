@@ -1,5 +1,5 @@
 import m from 'mithril';
-import { spaceToCss } from './Box';
+import { spaceToCss } from './Box.js';
 
 export type ButtonVariant = 'solid' | 'outline' | 'ghost';
 export type ButtonSize = 'sm' | 'md' | 'lg';

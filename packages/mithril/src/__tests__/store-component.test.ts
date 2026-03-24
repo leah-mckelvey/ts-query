@@ -1,7 +1,7 @@
 import m from 'mithril';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createStore } from '../../../core/src/store';
-import { createStoreComponent } from '../store-component';
+import { createStore } from '../../../core/src/store.js';
+import { createStoreComponent } from '../store-component.js';
 
 interface CounterState {
   count: number;

@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import type { MutationOptions, MutationState } from '@ts-query/core';
-import { useQueryClient } from './context';
+import { useQueryClient } from './context.js';
 
 export interface UseMutationResult<
   TData = unknown,

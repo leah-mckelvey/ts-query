@@ -1,8 +1,8 @@
 import m from 'mithril';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { QueryClient } from '@ts-query/core';
-import { setQueryClient } from '../query-client-provider';
-import { createQueryComponent } from '../use-query';
+import { setQueryClient } from '../query-client-provider.js';
+import { createQueryComponent } from '../use-query.js';
 
 describe('Mithril useQuery', () => {
   let container: HTMLElement;

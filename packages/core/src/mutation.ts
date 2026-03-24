@@ -1,4 +1,4 @@
-import type { MutationOptions, MutationState, Subscriber } from './types';
+import type { MutationOptions, MutationState, Subscriber } from './types.js';
 
 export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
   private subscribers = new Set<Subscriber<MutationState<TData, TError>>>();

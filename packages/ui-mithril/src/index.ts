@@ -1,16 +1,16 @@
-export { Box } from './Box';
-export type { BoxAttrs, SpaceValue } from './Box';
+export { Box } from './Box.js';
+export type { BoxAttrs, SpaceValue } from './Box.js';
 
-export { Button } from './Button';
+export { Button } from './Button.js';
 export type {
   ButtonAttrs,
   ButtonVariant,
   ButtonSize,
   ButtonColorScheme,
-} from './Button';
+} from './Button.js';
 
-export { Stack } from './Stack';
-export type { StackAttrs, StackDirection } from './Stack';
+export { Stack } from './Stack.js';
+export type { StackAttrs, StackDirection } from './Stack.js';
 
-export { Text, Heading } from './Text';
-export type { TextAttrs, HeadingAttrs } from './Text';
+export { Text, Heading } from './Text.js';
+export type { TextAttrs, HeadingAttrs } from './Text.js';

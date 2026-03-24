@@ -4,7 +4,7 @@ import {
   __resetQueryClientForTests,
   getQueryClient,
   setQueryClient,
-} from '../query-client-provider';
+} from '../query-client-provider.js';
 
 describe('query-client-provider', () => {
   it('throws if getQueryClient is called before setQueryClient', () => {

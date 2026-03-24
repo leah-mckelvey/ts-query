@@ -1,12 +1,12 @@
-import { Query } from './query';
-import { Mutation } from './mutation';
+import { Query } from './query.js';
+import { Mutation } from './mutation.js';
 import type {
   QueryKey,
   QueryOptions,
   MutationOptions,
   QueryClientConfig,
   SharedCacheConfig,
-} from './types';
+} from './types.js';
 
 const DEFAULT_SHARED_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
