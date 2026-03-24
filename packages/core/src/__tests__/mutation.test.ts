@@ -223,4 +223,76 @@ describe('Mutation', () => {
     // mutationFn was only called once (for 'a'), never for 'b'
     expect(mutationFn).toHaveBeenCalledTimes(1);
   });
+
+  it('should drain the queue even when the in-flight mutation errors', async () => {
+    const error = new Error('first failed');
+    const mutationFn = vi.fn()
+      .mockRejectedValueOnce(error)
+      .mockResolvedValueOnce('second');
+
+    const mutation = new Mutation({ mutationFn });
+
+    const p1 = mutation.mutate('a');
+    const p2 = mutation.mutate('b');
+
+    await expect(p1).rejects.toThrow('first failed');
+    await expect(p2).resolves.toBe('second');
+    expect(mutationFn).toHaveBeenCalledTimes(2);
+  });
+
+  it('should propagate errors from queued mutations to their callers without blocking the rest of the queue', async () => {
+    const error = new Error('second failed');
+    const mutationFn = vi.fn()
+      .mockResolvedValueOnce('first')
+      .mockRejectedValueOnce(error)
+      .mockResolvedValueOnce('third');
+
+    const mutation = new Mutation({ mutationFn });
+
+    const p1 = mutation.mutate('a');
+    const p2 = mutation.mutate('b');
+    const p3 = mutation.mutate('c');
+
+    await expect(p1).resolves.toBe('first');
+    await expect(p2).rejects.toThrow('second failed');
+    await expect(p3).resolves.toBe('third');
+    expect(mutationFn).toHaveBeenCalledTimes(3);
+  });
+
+  it('should invoke onSuccess and onSettled callbacks for queued mutations', async () => {
+    const onSuccess = vi.fn();
+    const onSettled = vi.fn();
+    const mutationFn = vi.fn()
+      .mockResolvedValueOnce('first')
+      .mockResolvedValueOnce('second');
+
+    const mutation = new Mutation({ mutationFn, onSuccess, onSettled });
+
+    await Promise.all([mutation.mutate('a'), mutation.mutate('b')]);
+
+    expect(onSuccess).toHaveBeenCalledTimes(2);
+    expect(onSuccess).toHaveBeenNthCalledWith(1, 'first', 'a');
+    expect(onSuccess).toHaveBeenNthCalledWith(2, 'second', 'b');
+    expect(onSettled).toHaveBeenCalledTimes(2);
+  });
+
+  it('should invoke onError and onSettled callbacks for a queued mutation that fails', async () => {
+    const error = new Error('queued error');
+    const onError = vi.fn();
+    const onSettled = vi.fn();
+    const mutationFn = vi.fn()
+      .mockResolvedValueOnce('first')
+      .mockRejectedValueOnce(error);
+
+    const mutation = new Mutation({ mutationFn, onError, onSettled });
+
+    const p1 = mutation.mutate('a');
+    const p2 = mutation.mutate('b');
+
+    await expect(p1).resolves.toBe('first');
+    await expect(p2).rejects.toThrow('queued error');
+
+    expect(onError).toHaveBeenCalledWith(error, 'b');
+    expect(onSettled).toHaveBeenCalledWith(undefined, error, 'b');
+  });
 });
