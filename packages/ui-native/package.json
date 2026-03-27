@@ -1,0 +1,27 @@
+{
+  "name": "@ts-query/ui-native",
+  "version": "1.0.0",
+  "description": "Tamagui-style React Native UI primitives for ts-query",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "keywords": [
+    "react-native",
+    "ui",
+    "components",
+    "tamagui",
+    "box",
+    "stack",
+    "text",
+    "button"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-native": ">=0.70.0"
+  }
+}
