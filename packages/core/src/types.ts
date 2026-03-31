@@ -42,11 +42,58 @@ export interface SharedCacheConfig {
 }
 
 /**
+ * Per-type normalization policy for the normalized cache.
+ *
+ * @example
+ * // Use a composite key
+ * { keyFields: ['orgId', 'userId'] }
+ *
+ * @example
+ * // Custom merge: append instead of replace for a list field
+ * { merge: (existing, incoming) => ({ ...incoming, items: [...(existing.items ?? []), ...incoming.items] }) }
+ */
+export interface TypePolicy {
+  /**
+   * Field name(s) used to derive the entity's cache key.
+   * Defaults to `'id'` when omitted.
+   */
+  keyFields?: string | string[];
+  /**
+   * Custom merge function for this type.
+   * Receives the existing cached record and the incoming record;
+   * returns the merged record to store.
+   * When omitted a shallow merge (`{ ...existing, ...incoming }`) is used.
+   */
+  merge?: (
+    existing: Record<string, unknown>,
+    incoming: Record<string, unknown>,
+  ) => Record<string, unknown>;
+}
+
+/**
+ * Configuration for the in-process normalized entity cache.
+ *
+ * When provided to QueryClient, query results containing objects with
+ * `__typename` are automatically normalized into a flat entity store.
+ * Calling `writeFragment` on a type updates every query that referenced
+ * that entity — no refetch required.
+ */
+export interface NormalizedCacheConfig {
+  /**
+   * Per-type normalization policies.
+   * Types not listed here use the default policy (`keyFields: 'id'`).
+   */
+  typePolicies?: Record<string, TypePolicy>;
+}
+
+/**
  * Configuration options for QueryClient.
  */
 export interface QueryClientConfig {
   /** Optional shared cache (L2) configuration for multi-tier caching. */
   sharedCache?: SharedCacheConfig;
+  /** Optional normalized entity cache for GraphQL responses. */
+  normalizedCache?: NormalizedCacheConfig;
 }
 
 export interface QueryOptions<TData = unknown, TError = Error> {

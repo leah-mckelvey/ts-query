@@ -2,6 +2,7 @@ export { QueryClient } from './query-client';
 export { Query } from './query';
 export { Mutation } from './mutation';
 export { createStore } from './store';
+export { NormalizedCache } from './normalized-cache';
 export type {
   QueryKey,
   QueryStatus,
@@ -10,6 +11,8 @@ export type {
   QueryClientConfig,
   SharedCacheAdapter,
   SharedCacheConfig,
+  NormalizedCacheConfig,
+  TypePolicy,
   MutationOptions,
   MutationState,
   Subscriber,

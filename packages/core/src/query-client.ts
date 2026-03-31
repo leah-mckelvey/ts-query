@@ -1,5 +1,6 @@
 import { Query } from './query';
 import { Mutation } from './mutation';
+import { NormalizedCache } from './normalized-cache';
 import type {
   QueryKey,
   QueryOptions,
@@ -13,9 +14,13 @@ const DEFAULT_SHARED_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 export class QueryClient {
   private queries = new Map<string, Query<unknown, unknown>>();
   private sharedCacheConfig?: SharedCacheConfig;
+  private normalizedCache?: NormalizedCache;
 
   constructor(config?: QueryClientConfig) {
     this.sharedCacheConfig = config?.sharedCache;
+    if (config?.normalizedCache) {
+      this.normalizedCache = new NormalizedCache(config.normalizedCache);
+    }
   }
 
   private getQueryKey(key: QueryKey): string {
@@ -55,6 +60,8 @@ export class QueryClient {
                 ttl: sharedCacheTtl,
               }
             : undefined,
+        // Pass normalized cache context if configured
+        this.normalizedCache ? { cache: this.normalizedCache, key } : undefined,
       );
       this.queries.set(key, query as unknown as Query<unknown, unknown>);
     }
@@ -96,6 +103,73 @@ export class QueryClient {
       // Remove all queries
       this.queries.forEach((query) => query.destroy());
       this.queries.clear();
+    }
+  }
+
+  /**
+   * Update a specific entity in the normalized cache and immediately push the
+   * new data to all subscribed queries that referenced it — no refetch needed.
+   *
+   * Requires the QueryClient to be configured with `normalizedCache`.
+   *
+   * @example
+   * // After a mutation that renamed a user:
+   * client.writeFragment('User', userId, { name: 'New Name' });
+   */
+  writeFragment<T extends Record<string, unknown>>(
+    typename: string,
+    id: string | number,
+    data: Partial<T>,
+  ): void {
+    this.normalizedCache?.writeFragment(
+      typename,
+      id,
+      data as Record<string, unknown>,
+    );
+  }
+
+  /**
+   * Read a raw entity record directly from the normalized cache without going
+   * through any query. Returns undefined if not cached or if the normalized
+   * cache is not configured.
+   */
+  readFragment<T extends Record<string, unknown> = Record<string, unknown>>(
+    typename: string,
+    id: string | number,
+  ): T | undefined {
+    return this.normalizedCache?.readFragment<T>(typename, id);
+  }
+
+  /**
+   * Subscribe to changes for a specific entity in the normalized cache.
+   * The callback is invoked whenever `writeFragment` or `evict` touches this entity.
+   * Returns an unsubscribe function.
+   *
+   * Primarily used by `useFragment` in framework adapters.
+   */
+  subscribeFragment(
+    typename: string,
+    id: string | number,
+    callback: () => void,
+  ): () => void {
+    if (!this.normalizedCache) return () => {};
+    return this.normalizedCache.subscribeToEntity(typename, id, callback);
+  }
+
+  /**
+   * Remove an entity from the normalized cache and invalidate every query that
+   * referenced it so they refetch fresh data.
+   *
+   * @example
+   * // After deleting a post:
+   * client.evict('Post', postId);
+   */
+  evict(typename: string, id: string | number): void {
+    if (!this.normalizedCache) return;
+    const affectedKeys = this.normalizedCache.evict(typename, id);
+    for (const key of affectedKeys) {
+      const query = this.queries.get(key);
+      query?.invalidate();
     }
   }
 

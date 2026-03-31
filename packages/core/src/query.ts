@@ -4,6 +4,7 @@ import type {
   Subscriber,
   SharedCacheAdapter,
 } from './types';
+import type { NormalizedCache } from './normalized-cache';
 
 /**
  * Unique sentinel symbol to distinguish "cache miss" from "cache returned null".
@@ -21,6 +22,15 @@ export interface SharedCacheContext {
   ttl: number;
 }
 
+/**
+ * Context for normalized cache operations, passed from QueryClient.
+ */
+export interface NormalizedCacheContext {
+  cache: NormalizedCache;
+  /** The serialized query key used as the identity within the normalized cache. */
+  key: string;
+}
+
 export class Query<TData = unknown, TError = Error> {
   private subscribers = new Set<Subscriber<QueryState<TData, TError>>>();
   private options: QueryOptions<TData, TError>;
@@ -31,6 +41,8 @@ export class Query<TData = unknown, TError = Error> {
   private onGarbageCollection?: () => void;
   private sharedCacheContext?: SharedCacheContext;
   private skipSharedCacheOnNextFetch = false;
+  private normalizedCacheContext?: NormalizedCacheContext;
+  private unregisterNormalizedListener?: () => void;
 
   state: QueryState<TData, TError> = {
     status: 'idle',
@@ -47,10 +59,29 @@ export class Query<TData = unknown, TError = Error> {
     options: QueryOptions<TData, TError>,
     onGarbageCollection?: () => void,
     sharedCacheContext?: SharedCacheContext,
+    normalizedCacheContext?: NormalizedCacheContext,
   ) {
     this.options = options;
     this.onGarbageCollection = onGarbageCollection;
     this.sharedCacheContext = sharedCacheContext;
+    this.normalizedCacheContext = normalizedCacheContext;
+
+    if (normalizedCacheContext) {
+      // When an entity referenced by this query changes, recompute state.data
+      // from the normalized shape and push it to subscribers without a refetch.
+      this.unregisterNormalizedListener =
+        normalizedCacheContext.cache.registerQueryListener(
+          normalizedCacheContext.key,
+          () => {
+            const fresh = normalizedCacheContext.cache.readQuery(
+              normalizedCacheContext.key,
+            ) as TData;
+            if (fresh !== undefined) {
+              this.updateState({ data: fresh });
+            }
+          },
+        );
+    }
   }
 
   subscribe(subscriber: Subscriber<QueryState<TData, TError>>): () => void {
@@ -253,6 +284,14 @@ export class Query<TData = unknown, TError = Error> {
         this.setInSharedCache(data);
       }
 
+      // Normalize into the entity store (if configured)
+      if (this.normalizedCacheContext) {
+        this.normalizedCacheContext.cache.writeQuery(
+          this.normalizedCacheContext.key,
+          data,
+        );
+      }
+
       // Populate L1 (in-process cache via state)
       this.updateState({
         status: 'success',
@@ -340,5 +379,7 @@ export class Query<TData = unknown, TError = Error> {
     this.clearCacheTimeout();
     this.subscribers.clear();
     this.onGarbageCollection = undefined;
+    this.unregisterNormalizedListener?.();
+    this.unregisterNormalizedListener = undefined;
   }
 }
