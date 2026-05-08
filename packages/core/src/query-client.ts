@@ -1,17 +1,23 @@
 import { Query } from './query';
 import { Mutation } from './mutation';
+import { InfiniteQuery } from './infinite-query';
 import type {
   QueryKey,
   QueryOptions,
   MutationOptions,
   QueryClientConfig,
   SharedCacheConfig,
+  InfiniteQueryOptions,
 } from './types';
 
 const DEFAULT_SHARED_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export class QueryClient {
   private queries = new Map<string, Query<unknown, unknown>>();
+  private infiniteQueries = new Map<
+    string,
+    InfiniteQuery<unknown, unknown, unknown>
+  >();
   private sharedCacheConfig?: SharedCacheConfig;
 
   constructor(config?: QueryClientConfig) {
@@ -219,6 +225,35 @@ export class QueryClient {
     options: MutationOptions<TData, TVariables, TError>,
   ): Mutation<TData, TVariables, TError> {
     return new Mutation<TData, TVariables, TError>(options);
+  }
+
+  /**
+   * Lookup or create an InfiniteQuery for the given options. Same caching /
+   * dedup semantics as getQuery — subsequent calls with the same queryKey
+   * return the existing instance.
+   */
+  getInfiniteQuery<TPageData = unknown, TPageParam = unknown, TError = Error>(
+    options: InfiniteQueryOptions<TPageData, TPageParam, TError>,
+  ): InfiniteQuery<TPageData, TPageParam, TError> {
+    const key = this.getQueryKey(options.queryKey);
+    let q = this.infiniteQueries.get(key) as
+      | InfiniteQuery<TPageData, TPageParam, TError>
+      | undefined;
+    if (!q) {
+      q = new InfiniteQuery<TPageData, TPageParam, TError>(options, () => {
+        const current = this.infiniteQueries.get(key);
+        if (
+          current === (q as unknown as InfiniteQuery<unknown, unknown, unknown>)
+        ) {
+          this.infiniteQueries.delete(key);
+        }
+      });
+      this.infiniteQueries.set(
+        key,
+        q as unknown as InfiniteQuery<unknown, unknown, unknown>,
+      );
+    }
+    return q;
   }
 
   /**

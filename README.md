@@ -215,6 +215,34 @@ query.isError; // Boolean error state
 query.isFetching; // Boolean fetching state
 ```
 
+### useInfiniteQuery
+
+Cursor-paginated queries. The hook returns the same state shape as
+TanStack's `useInfiniteQuery` plus `fetchNextPage` / `fetchPreviousPage`.
+
+```typescript
+const {
+  data, // { pages: Page[]; pageParams: Cursor[] } | undefined
+  fetchNextPage,
+  fetchPreviousPage,
+  hasNextPage,
+  hasPreviousPage,
+  isFetchingNextPage,
+  isLoading,
+} = useInfiniteQuery({
+  queryKey: ['posts'],
+  initialPageParam: 0,
+  queryFn: ({ pageParam, signal }) =>
+    fetch(`/api/posts?cursor=${pageParam}`, { signal }).then((r) => r.json()),
+  getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  getPreviousPageParam: (firstPage) => firstPage.prevCursor ?? undefined,
+  maxPages: 5, // optional: keep at most 5 pages in memory
+});
+
+// Render
+data?.pages.flatMap((page) => page.items).map((item) => /* ... */);
+```
+
 ### useMutation
 
 Handle mutations (POST, PUT, DELETE operations).
@@ -303,7 +331,7 @@ running with production-grade infrastructure inside a day.
 - ~~**Cancellation support** — `AbortSignal` propagation from the core to `queryFn`~~ ✅
 - **Window-focus & network-reconnect refetching**
 - **Polling intervals**
-- **Infinite & paginated queries**
+- ~~**Infinite & paginated queries**~~ ✅
 - **Optimistic updates & rollback**
 - **Devtools**
 - **SSR prefetch & hydration**
