@@ -211,28 +211,106 @@ describe('Query', () => {
     expect(query.state.status).toBe('success');
   });
 
-  it('should not refetch when invalidated during an in-flight fetch', async () => {
-    let resolve!: (value: string) => void;
+  it('should cancel and refetch when invalidated during an in-flight fetch', async () => {
+    // Each call to queryFn returns a fresh deferred so we can resolve the
+    // second one independently from the first.
+    const resolvers: Array<(value: string) => void> = [];
     const queryFn = vi.fn(
-      () =>
-        new Promise<string>((res) => {
-          resolve = res;
+      ({ signal }: { signal: AbortSignal }) =>
+        new Promise<string>((res, rej) => {
+          resolvers.push(res);
+          signal.addEventListener('abort', () => {
+            rej(new Error('aborted'));
+          });
         }),
     );
     const query = new Query({
       queryKey: 'test',
       queryFn,
+      retry: 0,
+    });
+
+    const firstPromise = query.fetch();
+    // Swallow the abort rejection from the cancelled first fetch.
+    firstPromise.catch(() => {});
+    query.invalidate();
+
+    expect(queryFn).toHaveBeenCalledTimes(2);
+
+    // Resolve the second (re-fetched) call. The first was aborted.
+    resolvers[1]('fresh');
+    await vi.waitFor(() => {
+      expect(query.state.status).toBe('success');
+    });
+    expect(query.state.data).toBe('fresh');
+  });
+
+  it('should propagate the AbortSignal to queryFn', async () => {
+    let receivedSignal: AbortSignal | undefined;
+    const queryFn = vi.fn(({ signal }: { signal: AbortSignal }) => {
+      receivedSignal = signal;
+      return Promise.resolve('data');
+    });
+    const query = new Query({ queryKey: 'test', queryFn });
+    await query.fetch();
+    expect(receivedSignal).toBeInstanceOf(AbortSignal);
+    expect(receivedSignal!.aborted).toBe(false);
+  });
+
+  it('should abort the signal when cancel() is called mid-flight', async () => {
+    let signalRef: AbortSignal | undefined;
+    const queryFn = vi.fn(
+      ({ signal }: { signal: AbortSignal }) =>
+        new Promise<string>(() => {
+          signalRef = signal;
+        }),
+    );
+    const query = new Query({ queryKey: 'test', queryFn });
+    const fetchPromise = query.fetch();
+    fetchPromise.catch(() => {});
+
+    expect(signalRef!.aborted).toBe(false);
+    query.cancel();
+    expect(signalRef!.aborted).toBe(true);
+    expect(query.state.isFetching).toBe(false);
+  });
+
+  it('should not retry when cancelled', async () => {
+    const queryFn = vi.fn(({ signal }: { signal: AbortSignal }) => {
+      return new Promise<string>((_, rej) => {
+        signal.addEventListener('abort', () => rej(new Error('aborted')));
+      });
+    });
+    const query = new Query({
+      queryKey: 'test',
+      queryFn,
+      retry: 5,
     });
 
     const promise = query.fetch();
-    query.invalidate();
+    promise.catch(() => {});
+    query.cancel();
 
+    // Give microtasks a chance to flush. With retry=5 a buggy implementation
+    // would call queryFn again; we want exactly one call.
+    await Promise.resolve();
     expect(queryFn).toHaveBeenCalledTimes(1);
+  });
 
-    resolve('data');
-    const result = await promise;
+  it('setData transitions to success and cancels in-flight fetch', () => {
+    const queryFn = vi.fn(
+      ({ signal: _signal }: { signal: AbortSignal }) =>
+        new Promise<string>(() => {
+          /* never resolves */
+        }),
+    );
+    const query = new Query({ queryKey: 'test', queryFn });
+    query.fetch().catch(() => {});
+    expect(query.state.isFetching).toBe(true);
 
-    expect(result).toBe('data');
-    expect(queryFn).toHaveBeenCalledTimes(1);
+    query.setData('hello');
+    expect(query.state.status).toBe('success');
+    expect(query.state.data).toBe('hello');
+    expect(query.state.isFetching).toBe(false);
   });
 });

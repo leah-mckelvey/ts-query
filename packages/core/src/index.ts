@@ -1,5 +1,5 @@
 export { QueryClient } from './query-client';
-export { Query } from './query';
+export { Query, QueryCancelledError } from './query';
 export { Mutation } from './mutation';
 export { createStore } from './store';
 export type {
@@ -7,6 +7,8 @@ export type {
   QueryStatus,
   QueryState,
   QueryOptions,
+  QueryFunction,
+  QueryFunctionContext,
   QueryClientConfig,
   SharedCacheAdapter,
   SharedCacheConfig,
