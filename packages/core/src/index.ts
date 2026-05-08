@@ -1,6 +1,7 @@
 export { QueryClient } from './query-client';
 export { Query, QueryCancelledError } from './query';
 export { Mutation } from './mutation';
+export { InfiniteQuery } from './infinite-query';
 export { createStore } from './store';
 export type {
   QueryKey,
@@ -15,6 +16,10 @@ export type {
   MutationOptions,
   MutationState,
   Subscriber,
+  InfiniteData,
+  InfiniteQueryOptions,
+  InfiniteQueryState,
+  InfiniteQueryFunctionContext,
 } from './types';
 export type {
   Store,

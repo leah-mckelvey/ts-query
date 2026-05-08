@@ -113,3 +113,77 @@ export interface Query<TData = unknown, TError = Error> {
   fetch: () => Promise<TData>;
   invalidate: () => void;
 }
+
+/**
+ * The materialised value of an infinite query. `pages` is each page in the
+ * order it was fetched; `pageParams` records the cursor used to fetch each.
+ * Aligning with TanStack's shape so existing usage patterns transfer.
+ */
+export interface InfiniteData<TPageData, TPageParam> {
+  pages: TPageData[];
+  pageParams: TPageParam[];
+}
+
+export interface InfiniteQueryFunctionContext<
+  TPageParam,
+> extends QueryFunctionContext {
+  pageParam: TPageParam;
+  direction: 'forward' | 'backward';
+}
+
+export interface InfiniteQueryOptions<
+  TPageData = unknown,
+  TPageParam = unknown,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  TError = Error,
+> {
+  queryKey: QueryKey;
+  queryFn: (
+    context: InfiniteQueryFunctionContext<TPageParam>,
+  ) => Promise<TPageData>;
+  /** Page param for the very first page. Required. */
+  initialPageParam: TPageParam;
+  /**
+   * Given the most recent page and the running list, return the param for
+   * the next page or `undefined` to indicate there is no next page.
+   */
+  getNextPageParam: (
+    lastPage: TPageData,
+    allPages: TPageData[],
+    lastPageParam: TPageParam,
+    allPageParams: TPageParam[],
+  ) => TPageParam | undefined | null;
+  /** Optional: return the param for the previous page (cursor pagination). */
+  getPreviousPageParam?: (
+    firstPage: TPageData,
+    allPages: TPageData[],
+    firstPageParam: TPageParam,
+    allPageParams: TPageParam[],
+  ) => TPageParam | undefined | null;
+  staleTime?: number;
+  cacheTime?: number;
+  retry?: number;
+  retryDelay?: number;
+  enabled?: boolean;
+  /** Cap on stored pages. When exceeded, the oldest page is dropped on append. */
+  maxPages?: number;
+}
+
+export interface InfiniteQueryState<
+  TPageData = unknown,
+  TPageParam = unknown,
+  TError = Error,
+> {
+  status: QueryStatus;
+  data: InfiniteData<TPageData, TPageParam> | undefined;
+  error: TError | null;
+  isLoading: boolean;
+  isSuccess: boolean;
+  isError: boolean;
+  isFetching: boolean;
+  isFetchingNextPage: boolean;
+  isFetchingPreviousPage: boolean;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  isStale: boolean;
+}
