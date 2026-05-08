@@ -15,6 +15,7 @@ packages/
 ├── core/            # QueryClient, Query, Mutation, createStore (zero deps)
 ├── react/           # React adapter — useQuery, useMutation, useStore hooks
 ├── mithril/         # Mithril adapter — lifecycle-safe components
+├── graphql/         # GraphQL adapter — fetch HTTP transport + APQ + TypedDocumentNode
 ├── ui-react/        # Design-token-driven React component library
 ├── ui-mithril/      # Design-token-driven Mithril component library
 ├── ui-native/       # React Native component library
@@ -172,6 +173,51 @@ queryClient.cancelQueries(['user', 1]);
 queryClient.cancelQueries(); // cancel everything
 ```
 
+### GraphQL
+
+Use `@ts-query/graphql` for GraphQL endpoints. Plain `fetch` HTTP
+transport, optional Automatic Persisted Queries, and structural
+TypedDocumentNode support so codegen-produced types flow through.
+
+```bash
+npm install @ts-query/core @ts-query/react @ts-query/graphql
+# Optional, for type inference from codegen:
+npm install -D @graphql-typed-document-node/core
+```
+
+```typescript
+import { GraphQLClient, gql, graphqlQuery } from '@ts-query/graphql';
+import { useQuery } from '@ts-query/react';
+
+const gqlClient = new GraphQLClient({
+  endpoint: 'https://api.example.com/graphql',
+  headers: () => ({ Authorization: `Bearer ${getToken()}` }),
+  enableAPQ: true, // hash-only first, falls back to full query on PersistedQueryNotFound
+});
+
+const GetUser = gql`
+  query GetUser($id: Int!) {
+    user(id: $id) {
+      id
+      name
+    }
+  }
+`;
+
+function User({ id }: { id: number }) {
+  const { data } = useQuery(graphqlQuery(gqlClient, GetUser, { id }));
+  return <div>{data?.user.name}</div>;
+}
+```
+
+`graphqlQuery` produces a `QueryOptions` you can hand to `useQuery`,
+`prefetchQuery`, `ensureQueryData`, etc. The default queryKey is
+`['gql', operationName, variables]` so different variables for the same
+operation are different cache entries.
+
+The `AbortSignal` from cancellation flows all the way to `fetch()` so
+cancelled queries kill in-flight network requests.
+
 ### Cancellation
 
 `queryFn` receives a `QueryFunctionContext` with an `AbortSignal` you can
@@ -307,7 +353,7 @@ running with production-grade infrastructure inside a day.
 - **Optimistic updates & rollback**
 - **Devtools**
 - **SSR prefetch & hydration**
-- **GraphQL adapter** (`@ts-query/graphql` — HTTP + `TypedDocumentNode` + APQ)
+- ~~**GraphQL adapter**~~ ✅ (`@ts-query/graphql` — HTTP + `TypedDocumentNode` + APQ)
 
 ## License
 
