@@ -201,6 +201,10 @@ const query = useQuery({
   retry: 3, // Number of retry attempts on failure
   retryDelay: 1000, // Delay between retries (ms)
   enabled: true, // Whether query should run automatically
+  refetchInterval: 30_000, // Poll every 30s while subscribed and tab is focused
+  refetchIntervalInBackground: false, // Pause polling when tab is hidden
+  refetchOnWindowFocus: true, // Refetch stale data when tab regains focus
+  refetchOnReconnect: true, // Refetch stale data when network reconnects
   onSuccess: (data) => {}, // Callback on successful fetch
   onError: (error) => {}, // Callback on error
 });
@@ -301,8 +305,8 @@ running with production-grade infrastructure inside a day.
 ## Roadmap
 
 - ~~**Cancellation support** — `AbortSignal` propagation from the core to `queryFn`~~ ✅
-- **Window-focus & network-reconnect refetching**
-- **Polling intervals**
+- ~~**Window-focus & network-reconnect refetching**~~ ✅
+- ~~**Polling intervals**~~ ✅
 - **Infinite & paginated queries**
 - **Optimistic updates & rollback**
 - **Devtools**

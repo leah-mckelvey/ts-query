@@ -4,6 +4,8 @@ import type {
   Subscriber,
   SharedCacheAdapter,
 } from './types';
+import { focusManager } from './focus-manager';
+import { onlineManager } from './online-manager';
 
 /**
  * Unique sentinel symbol to distinguish "cache miss" from "cache returned null".
@@ -38,12 +40,15 @@ export class Query<TData = unknown, TError = Error> {
   private options: QueryOptions<TData, TError>;
   private staleTimeout: ReturnType<typeof setTimeout> | null = null;
   private cacheTimeout: ReturnType<typeof setTimeout> | null = null;
+  private refetchIntervalId: ReturnType<typeof setInterval> | null = null;
   private retryCount = 0;
   private currentFetchPromise: Promise<TData> | null = null;
   private abortController: AbortController | null = null;
   private onGarbageCollection?: () => void;
   private sharedCacheContext?: SharedCacheContext;
   private skipSharedCacheOnNextFetch = false;
+  private unsubscribeFocus: (() => void) | null = null;
+  private unsubscribeOnline: (() => void) | null = null;
 
   state: QueryState<TData, TError> = {
     status: 'idle',
@@ -73,15 +78,88 @@ export class Query<TData = unknown, TError = Error> {
     // so ensure any pending garbage-collection timer is cleared.
     this.clearCacheTimeout();
 
+    if (this.subscribers.size === 1) {
+      this.attachAutoRefetch();
+      this.scheduleRefetchInterval();
+    }
+
     return () => {
       this.subscribers.delete(subscriber);
 
       // When the last subscriber unsubscribes, (re)schedule garbage collection so
-      // the query can be collected once it truly becomes unused.
+      // the query can be collected once it truly becomes unused. Auto-refetch
+      // and polling stop too — no point ticking for nobody.
       if (this.subscribers.size === 0) {
+        this.detachAutoRefetch();
+        this.clearRefetchInterval();
         this.scheduleGarbageCollection();
       }
     };
+  }
+
+  /**
+   * Subscribe to focus and online managers so this query refetches when the
+   * tab regains focus or the network reconnects, provided the data is stale.
+   * Wired up only while there are subscribers — otherwise we'd be keeping
+   * orphan queries alive across visibility/connectivity events.
+   */
+  private attachAutoRefetch(): void {
+    if (this.options.refetchOnWindowFocus !== false) {
+      this.unsubscribeFocus = focusManager.subscribe(() => {
+        if (this.subscribers.size > 0 && this.shouldAutoRefetch()) {
+          this.fetch().catch(() => {});
+        }
+      });
+    }
+    if (this.options.refetchOnReconnect !== false) {
+      this.unsubscribeOnline = onlineManager.subscribe(() => {
+        if (this.subscribers.size > 0 && this.shouldAutoRefetch()) {
+          this.fetch().catch(() => {});
+        }
+      });
+    }
+  }
+
+  private detachAutoRefetch(): void {
+    this.unsubscribeFocus?.();
+    this.unsubscribeFocus = null;
+    this.unsubscribeOnline?.();
+    this.unsubscribeOnline = null;
+  }
+
+  /**
+   * Auto-refetch only fires when the data is stale (or there's no data yet).
+   * If the user has staleTime: Infinity, focus/reconnect won't trigger noisy
+   * refetches.
+   */
+  private shouldAutoRefetch(): boolean {
+    return this.state.status !== 'success' || this.state.isStale;
+  }
+
+  private scheduleRefetchInterval(): void {
+    this.clearRefetchInterval();
+    const interval = this.options.refetchInterval;
+    if (!interval || interval <= 0) return;
+
+    this.refetchIntervalId = setInterval(() => {
+      if (this.subscribers.size === 0) return;
+      // Pause polling while the tab is hidden unless the user opts into
+      // background polling. Saves battery and avoids API waste.
+      if (
+        !this.options.refetchIntervalInBackground &&
+        !focusManager.isFocused()
+      ) {
+        return;
+      }
+      this.fetch().catch(() => {});
+    }, interval);
+  }
+
+  private clearRefetchInterval(): void {
+    if (this.refetchIntervalId) {
+      clearInterval(this.refetchIntervalId);
+      this.refetchIntervalId = null;
+    }
   }
 
   private notify(): void {
@@ -415,6 +493,8 @@ export class Query<TData = unknown, TError = Error> {
     this.cancel('Query destroyed');
     this.clearStaleTimeout();
     this.clearCacheTimeout();
+    this.clearRefetchInterval();
+    this.detachAutoRefetch();
     this.subscribers.clear();
     this.onGarbageCollection = undefined;
   }

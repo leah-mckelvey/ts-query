@@ -77,6 +77,20 @@ export interface QueryOptions<TData = unknown, TError = Error> {
   retry?: number;
   retryDelay?: number;
   enabled?: boolean;
+  /**
+   * Refetch on this interval (ms). Pauses while there are no subscribers
+   * and (by default) while the tab is backgrounded. Set 0 / undefined to disable.
+   */
+  refetchInterval?: number;
+  /**
+   * If true, refetchInterval keeps ticking when the tab is hidden. Defaults
+   * to false to match TanStack — most apps don't want background polling.
+   */
+  refetchIntervalInBackground?: boolean;
+  /** Refetch when the window/tab regains focus and data is stale. Defaults to true. */
+  refetchOnWindowFocus?: boolean;
+  /** Refetch when the network reconnects and data is stale. Defaults to true. */
+  refetchOnReconnect?: boolean;
   onSuccess?: (data: TData) => void;
   onError?: (error: TError) => void;
 }
