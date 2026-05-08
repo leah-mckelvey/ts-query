@@ -172,6 +172,36 @@ queryClient.cancelQueries(['user', 1]);
 queryClient.cancelQueries(); // cancel everything
 ```
 
+### SSR — `dehydrate` / `hydrate`
+
+Prefetch on the server, serialise the cache, transfer to the client, and
+rehydrate. Same shape as TanStack's hydration API.
+
+```typescript
+// --- server ---
+import { QueryClient, dehydrate } from '@ts-query/core';
+
+const client = new QueryClient();
+await client.prefetchQuery({
+  queryKey: ['user', 1],
+  queryFn: () => db.users.findById(1),
+});
+const dehydratedState = dehydrate(client);
+res.send(
+  `<script>window.__TS_QUERY_STATE__ = ${JSON.stringify(dehydratedState)}</script>`,
+);
+
+// --- client ---
+import { QueryClient, hydrate } from '@ts-query/core';
+
+const client = new QueryClient();
+hydrate(client, window.__TS_QUERY_STATE__);
+// useQuery(['user', 1], ...) renders with the server data immediately.
+```
+
+Existing client-side data is not overwritten by hydrate, so a parallel
+client fetch racing the SSR handoff stays the source of truth.
+
 ### Cancellation
 
 `queryFn` receives a `QueryFunctionContext` with an `AbortSignal` you can
@@ -306,7 +336,7 @@ running with production-grade infrastructure inside a day.
 - **Infinite & paginated queries**
 - **Optimistic updates & rollback**
 - **Devtools**
-- **SSR prefetch & hydration**
+- ~~**SSR prefetch & hydration**~~ ✅
 - **GraphQL adapter** (`@ts-query/graphql` — HTTP + `TypedDocumentNode` + APQ)
 
 ## License
