@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Query } from '../query';
+import { focusManager } from '../focus-manager';
+import { onlineManager } from '../online-manager';
 
 describe('Query', () => {
   beforeEach(() => {
@@ -295,6 +297,165 @@ describe('Query', () => {
     // would call queryFn again; we want exactly one call.
     await Promise.resolve();
     expect(queryFn).toHaveBeenCalledTimes(1);
+  });
+
+  describe('auto-refetch', () => {
+    it('refetches stale data when the window regains focus', async () => {
+      vi.useRealTimers();
+      const queryFn = vi
+        .fn()
+        .mockResolvedValueOnce('first')
+        .mockResolvedValueOnce('second');
+      const query = new Query({
+        queryKey: 'focus-test',
+        queryFn,
+        staleTime: 0, // immediately stale
+      });
+      query.subscribe(() => {});
+      await query.fetch();
+      expect(query.state.data).toBe('first');
+
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+
+      await vi.waitFor(() => {
+        expect(queryFn).toHaveBeenCalledTimes(2);
+      });
+      expect(query.state.data).toBe('second');
+    });
+
+    it('does NOT refetch on focus when data is fresh', async () => {
+      vi.useRealTimers();
+      const queryFn = vi.fn().mockResolvedValue('data');
+      const query = new Query({
+        queryKey: 'focus-test-fresh',
+        queryFn,
+        staleTime: 60_000,
+      });
+      query.subscribe(() => {});
+      await query.fetch();
+
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+
+      // Give microtasks a chance to flush; if buggy, we'd see a second call.
+      await new Promise((r) => setTimeout(r, 10));
+      expect(queryFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('refetches when reconnecting from offline -> online', async () => {
+      vi.useRealTimers();
+      const queryFn = vi
+        .fn()
+        .mockResolvedValueOnce('first')
+        .mockResolvedValueOnce('second');
+      const query = new Query({
+        queryKey: 'reconnect-test',
+        queryFn,
+        staleTime: 0,
+      });
+      query.subscribe(() => {});
+      await query.fetch();
+
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+
+      await vi.waitFor(() => {
+        expect(queryFn).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    it('respects refetchOnWindowFocus: false', async () => {
+      vi.useRealTimers();
+      const queryFn = vi.fn().mockResolvedValue('data');
+      const query = new Query({
+        queryKey: 'focus-test-disabled',
+        queryFn,
+        staleTime: 0,
+        refetchOnWindowFocus: false,
+      });
+      query.subscribe(() => {});
+      await query.fetch();
+
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+
+      await new Promise((r) => setTimeout(r, 10));
+      expect(queryFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('refetchInterval polls while subscribed and tab is focused', async () => {
+      vi.useFakeTimers();
+      focusManager.setFocused(true);
+      const queryFn = vi.fn().mockResolvedValue('data');
+      const query = new Query({
+        queryKey: 'poll',
+        queryFn,
+        refetchInterval: 1000,
+      });
+      query.subscribe(() => {});
+
+      await query.fetch();
+      expect(queryFn).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(queryFn).toHaveBeenCalledTimes(3);
+    });
+
+    it('refetchInterval pauses when tab is hidden (without refetchIntervalInBackground)', async () => {
+      vi.useFakeTimers();
+      focusManager.setFocused(true);
+      const queryFn = vi.fn().mockResolvedValue('data');
+      const query = new Query({
+        queryKey: 'poll-bg',
+        queryFn,
+        refetchInterval: 1000,
+      });
+      query.subscribe(() => {});
+      await query.fetch();
+
+      focusManager.setFocused(false);
+      await vi.advanceTimersByTimeAsync(3000);
+      // Initial fetch only; intervals all skipped while hidden.
+      expect(queryFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('refetchInterval continues when refetchIntervalInBackground is true', async () => {
+      vi.useFakeTimers();
+      focusManager.setFocused(false);
+      const queryFn = vi.fn().mockResolvedValue('data');
+      const query = new Query({
+        queryKey: 'poll-bg-on',
+        queryFn,
+        refetchInterval: 1000,
+        refetchIntervalInBackground: true,
+      });
+      query.subscribe(() => {});
+      await query.fetch();
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(queryFn).toHaveBeenCalledTimes(3);
+    });
+
+    it('refetchInterval stops when last subscriber unsubscribes', async () => {
+      vi.useFakeTimers();
+      focusManager.setFocused(true);
+      const queryFn = vi.fn().mockResolvedValue('data');
+      const query = new Query({
+        queryKey: 'poll-unsub',
+        queryFn,
+        refetchInterval: 1000,
+      });
+      const unsubscribe = query.subscribe(() => {});
+      await query.fetch();
+
+      unsubscribe();
+
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(queryFn).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('setData transitions to success and cancels in-flight fetch', () => {
