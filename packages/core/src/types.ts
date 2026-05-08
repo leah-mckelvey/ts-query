@@ -49,9 +49,25 @@ export interface QueryClientConfig {
   sharedCache?: SharedCacheConfig;
 }
 
+/**
+ * Context passed to every queryFn invocation. Mirrors the TanStack Query shape.
+ * `signal` is aborted when the query is cancelled (via QueryClient.cancelQueries,
+ * Query.cancel, or invalidation while a fetch is in flight). queryFn implementations
+ * should forward this signal to fetch() / XHR / GraphQL clients to short-circuit
+ * in-flight network requests.
+ */
+export interface QueryFunctionContext {
+  queryKey: QueryKey;
+  signal: AbortSignal;
+}
+
+export type QueryFunction<TData = unknown> = (
+  context: QueryFunctionContext,
+) => Promise<TData>;
+
 export interface QueryOptions<TData = unknown, TError = Error> {
   queryKey: QueryKey;
-  queryFn: () => Promise<TData>;
+  queryFn: QueryFunction<TData>;
   staleTime?: number;
   cacheTime?: number;
   /** TTL for shared cache (L2) in milliseconds. Overrides the client-level default. */

@@ -719,4 +719,129 @@ describe('QueryClient with SharedCache (L2)', () => {
     const newQuery = client.getQuery({ queryKey: 'test', queryFn });
     expect(newQuery).not.toBe(query);
   });
+
+  describe('imperative cache API', () => {
+    it('getQueryData returns undefined for unknown keys', () => {
+      const client = new QueryClient();
+      expect(client.getQueryData('nope')).toBeUndefined();
+    });
+
+    it('setQueryData primes a query that has no queryFn yet', () => {
+      const client = new QueryClient();
+      client.setQueryData<{ name: string }>(['user', 1], { name: 'Ada' });
+      expect(client.getQueryData<{ name: string }>(['user', 1])).toEqual({
+        name: 'Ada',
+      });
+    });
+
+    it('setQueryData accepts an updater function with the previous value', async () => {
+      const client = new QueryClient();
+      const queryFn = vi.fn().mockResolvedValue({ count: 1 });
+      const query = client.getQuery<{ count: number }>({
+        queryKey: 'counter',
+        queryFn,
+      });
+      await query.fetch();
+
+      client.setQueryData<{ count: number }>('counter', (prev) => ({
+        count: (prev?.count ?? 0) + 10,
+      }));
+
+      expect(client.getQueryData<{ count: number }>('counter')).toEqual({
+        count: 11,
+      });
+    });
+
+    it('setQueryData transitions a primed query to success state', () => {
+      const client = new QueryClient();
+      client.setQueryData('user', { name: 'Ada' });
+      const query = client['queries'].get('user');
+      expect(query?.state.status).toBe('success');
+    });
+
+    it('prefetchQuery populates the cache without subscribers', async () => {
+      const client = new QueryClient();
+      const queryFn = vi.fn().mockResolvedValue('hello');
+      await client.prefetchQuery({ queryKey: 'greeting', queryFn });
+      expect(client.getQueryData('greeting')).toBe('hello');
+      expect(queryFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('prefetchQuery skips fetching when fresh data exists', async () => {
+      const client = new QueryClient();
+      const queryFn = vi.fn().mockResolvedValue('hello');
+      await client.prefetchQuery({
+        queryKey: 'greeting',
+        queryFn,
+        staleTime: 60_000,
+      });
+      await client.prefetchQuery({
+        queryKey: 'greeting',
+        queryFn,
+        staleTime: 60_000,
+      });
+      expect(queryFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('ensureQueryData fetches when missing', async () => {
+      const client = new QueryClient();
+      const queryFn = vi.fn().mockResolvedValue('fresh');
+      const data = await client.ensureQueryData({
+        queryKey: 'thing',
+        queryFn,
+      });
+      expect(data).toBe('fresh');
+      expect(queryFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('ensureQueryData returns cached data when fresh', async () => {
+      const client = new QueryClient();
+      const queryFn = vi.fn().mockResolvedValue('fresh');
+      // Register the query with a real staleTime first so subsequent setData
+      // schedules a stale window of 60s (the default staleTime is 0).
+      client.getQuery({ queryKey: 'thing', queryFn, staleTime: 60_000 });
+      client.setQueryData('thing', 'cached');
+      const data = await client.ensureQueryData({
+        queryKey: 'thing',
+        queryFn,
+        staleTime: 60_000,
+      });
+      expect(data).toBe('cached');
+      expect(queryFn).not.toHaveBeenCalled();
+    });
+
+    it('cancelQueries aborts an in-flight fetch for a specific key', async () => {
+      const client = new QueryClient();
+      const aborted: boolean[] = [];
+      const queryFn = vi.fn(({ signal }: { signal: AbortSignal }) => {
+        return new Promise<string>((_, rej) => {
+          signal.addEventListener('abort', () => {
+            aborted.push(true);
+            rej(new Error('aborted'));
+          });
+        });
+      });
+      const query = client.getQuery({ queryKey: 'slow', queryFn });
+      const fetchP = query.fetch();
+      fetchP.catch(() => {});
+      client.cancelQueries('slow');
+      expect(aborted).toEqual([true]);
+    });
+
+    it('cancelQueries with no key aborts all in-flight fetches', () => {
+      const client = new QueryClient();
+      const signals: AbortSignal[] = [];
+      const queryFn = vi.fn(({ signal }: { signal: AbortSignal }) => {
+        signals.push(signal);
+        return new Promise<string>(() => {});
+      });
+      const q1 = client.getQuery({ queryKey: 'a', queryFn });
+      const q2 = client.getQuery({ queryKey: 'b', queryFn });
+      q1.fetch().catch(() => {});
+      q2.fetch().catch(() => {});
+
+      client.cancelQueries();
+      expect(signals.every((s) => s.aborted)).toBe(true);
+    });
+  });
 });

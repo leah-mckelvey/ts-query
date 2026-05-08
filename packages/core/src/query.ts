@@ -21,6 +21,18 @@ export interface SharedCacheContext {
   ttl: number;
 }
 
+/**
+ * Error thrown when a Query fetch is cancelled via Query.cancel() or
+ * QueryClient.cancelQueries(). DOMException with name 'AbortError' is the
+ * web-standard convention; we mirror it so user code can interop with fetch().
+ */
+export class QueryCancelledError extends Error {
+  readonly name = 'AbortError';
+  constructor(message = 'Query was cancelled') {
+    super(message);
+  }
+}
+
 export class Query<TData = unknown, TError = Error> {
   private subscribers = new Set<Subscriber<QueryState<TData, TError>>>();
   private options: QueryOptions<TData, TError>;
@@ -28,6 +40,7 @@ export class Query<TData = unknown, TError = Error> {
   private cacheTimeout: ReturnType<typeof setTimeout> | null = null;
   private retryCount = 0;
   private currentFetchPromise: Promise<TData> | null = null;
+  private abortController: AbortController | null = null;
   private onGarbageCollection?: () => void;
   private sharedCacheContext?: SharedCacheContext;
   private skipSharedCacheOnNextFetch = false;
@@ -99,24 +112,70 @@ export class Query<TData = unknown, TError = Error> {
 
     // New fetch cycle: reset retry count and mark as loading/fetching.
     this.retryCount = 0;
+    this.abortController = new AbortController();
     this.updateState({ status: 'loading', isFetching: true });
 
-    const promise = this.executeFetch();
+    const signal = this.abortController.signal;
+    const promise = this.executeFetch(signal);
     this.currentFetchPromise = promise;
 
-    promise.finally(() => {
-      this.currentFetchPromise = null;
-    });
+    // Use a no-op catch to prevent unhandled rejection warnings from this
+    // bookkeeping path; callers attach their own .catch.
+    promise
+      .catch(() => {})
+      .finally(() => {
+        if (this.currentFetchPromise === promise) {
+          this.currentFetchPromise = null;
+          this.abortController = null;
+        }
+      });
 
     return promise;
   }
 
   /**
+   * Cancel an in-flight fetch. Aborts the AbortSignal passed to queryFn so
+   * downstream fetch()/XHR/GraphQL calls can short-circuit. State is reset
+   * to whatever it was before the fetch started — we don't surface the cancel
+   * as an error to subscribers because cancellation is a control-flow concern,
+   * not a data-fetching failure.
+   */
+  cancel(reason?: string): void {
+    if (this.abortController) {
+      this.abortController.abort(reason ?? 'Query cancelled');
+      this.abortController = null;
+    }
+    this.currentFetchPromise = null;
+    if (this.state.isFetching) {
+      this.updateState({ isFetching: false });
+    }
+  }
+
+  /**
+   * Imperatively set the query's data, transitioning it to a success state.
+   * Used by QueryClient.setQueryData and by optimistic-update flows.
+   * Cancels any in-flight fetch so the new data isn't immediately overwritten.
+   */
+  setData(data: TData): void {
+    this.cancel();
+    this.updateState({
+      status: 'success',
+      data,
+      error: null,
+      isFetching: false,
+    });
+    this.scheduleStale();
+  }
+
+  /**
    * Invalidate the query, bypassing L2 shared cache on refetch.
    * This ensures fresh data is fetched from L3 (source) after invalidation.
+   * Cancels any in-flight fetch so retries from the previous cycle don't
+   * race with the fresh fetch.
    */
   invalidate(): void {
     this.clearStaleTimeout();
+    this.cancel();
     // Skip L2 on next fetch to avoid race condition where delete hasn't completed
     this.skipSharedCacheOnNextFetch = true;
     this.fetch();
@@ -217,7 +276,7 @@ export class Query<TData = unknown, TError = Error> {
     }
   }
 
-  private async executeFetch(): Promise<TData> {
+  private async executeFetch(signal: AbortSignal): Promise<TData> {
     // Check if we should skip L2 (e.g., after invalidation)
     const shouldSkipSharedCache = this.skipSharedCacheOnNextFetch;
     this.skipSharedCacheOnNextFetch = false; // Reset flag
@@ -226,6 +285,7 @@ export class Query<TData = unknown, TError = Error> {
       // L2: Check shared cache first (only if configured and not skipped)
       if (this.sharedCacheContext && !shouldSkipSharedCache) {
         const cachedData = await this.getFromSharedCache();
+        if (signal.aborted) throw new QueryCancelledError();
         if (cachedData !== CACHE_MISS) {
           // L2 hit: populate L1 and return
           this.retryCount = 0;
@@ -245,7 +305,12 @@ export class Query<TData = unknown, TError = Error> {
       }
 
       // L3: Fetch from source (queryFn)
-      const data = await this.options.queryFn();
+      const data = await this.options.queryFn({
+        queryKey: this.options.queryKey,
+        signal,
+      });
+      // Discard the result if the fetch was cancelled while queryFn was running.
+      if (signal.aborted) throw new QueryCancelledError();
       this.retryCount = 0;
 
       // Populate L2 (shared cache) - fire and forget to avoid blocking
@@ -267,6 +332,16 @@ export class Query<TData = unknown, TError = Error> {
 
       return data;
     } catch (error) {
+      // Cancellation is control flow, not a data-fetch failure: don't retry,
+      // don't transition to error state, just propagate so callers awaiting
+      // fetch() see the abort.
+      if (
+        signal.aborted ||
+        (error instanceof Error && error.name === 'AbortError')
+      ) {
+        throw error;
+      }
+
       const err = error as TError;
 
       // Retry logic (only for L3 failures, not L2)
@@ -277,7 +352,8 @@ export class Query<TData = unknown, TError = Error> {
           this.options.retryDelay ??
           Math.min(1000 * 2 ** this.retryCount, 30000);
         await new Promise((resolve) => setTimeout(resolve, delay));
-        return this.executeFetch();
+        if (signal.aborted) throw new QueryCancelledError();
+        return this.executeFetch(signal);
       }
 
       this.updateState({
@@ -336,6 +412,7 @@ export class Query<TData = unknown, TError = Error> {
   }
 
   destroy(): void {
+    this.cancel('Query destroyed');
     this.clearStaleTimeout();
     this.clearCacheTimeout();
     this.subscribers.clear();

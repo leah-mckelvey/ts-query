@@ -154,6 +154,38 @@ queryClient.removeQueries(['users']);
 
 // Clear all queries
 queryClient.clear();
+
+// Imperative cache API
+queryClient.getQueryData<User>(['user', 1]);
+queryClient.setQueryData<User>(['user', 1], (prev) => ({
+  ...prev!,
+  name: 'New',
+}));
+await queryClient.prefetchQuery({ queryKey: ['user', 1], queryFn: fetchUser });
+const user = await queryClient.ensureQueryData({
+  queryKey: ['user', 1],
+  queryFn: fetchUser,
+});
+
+// Cancel in-flight fetches (e.g. on route change)
+queryClient.cancelQueries(['user', 1]);
+queryClient.cancelQueries(); // cancel everything
+```
+
+### Cancellation
+
+`queryFn` receives a `QueryFunctionContext` with an `AbortSignal` you can
+forward to `fetch`, XHR, or any GraphQL client. Cancellation fires when you
+call `queryClient.cancelQueries(...)` or when an in-flight fetch is
+invalidated, and surfaces as an `AbortError` from the awaited `fetch()`
+promise.
+
+```typescript
+useQuery({
+  queryKey: ['user', userId],
+  queryFn: ({ signal }) =>
+    fetch(`/api/users/${userId}`, { signal }).then((r) => r.json()),
+});
 ```
 
 ### useQuery
@@ -268,13 +300,14 @@ running with production-grade infrastructure inside a day.
 
 ## Roadmap
 
-- **Cancellation support** — `AbortSignal` propagation from the core to `queryFn`
+- ~~**Cancellation support** — `AbortSignal` propagation from the core to `queryFn`~~ ✅
 - **Window-focus & network-reconnect refetching**
 - **Polling intervals**
 - **Infinite & paginated queries**
 - **Optimistic updates & rollback**
 - **Devtools**
 - **SSR prefetch & hydration**
+- **GraphQL adapter** (`@ts-query/graphql` — HTTP + `TypedDocumentNode` + APQ)
 
 ## License
 
