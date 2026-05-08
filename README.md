@@ -245,6 +245,39 @@ mutation.state.isError; // Boolean error state
 mutation.reset();
 ```
 
+### Optimistic updates & rollback
+
+`useMutation` accepts an `onMutate` callback that runs before `mutationFn`.
+Whatever it returns is threaded through to `onSuccess`, `onError`, and
+`onSettled` as a `context` argument — that's how rollback works.
+
+```typescript
+const mutation = useMutation({
+  mutationFn: updateTodo,
+  onMutate: async (newTodo) => {
+    // Cancel any outgoing refetches so they don't overwrite our optimistic value
+    queryClient.cancelQueries(['todos']);
+    // Snapshot the previous value
+    const previous = queryClient.getQueryData<Todo[]>(['todos']);
+    // Optimistically update
+    queryClient.setQueryData<Todo[]>(['todos'], (old) => [
+      ...(old ?? []),
+      newTodo,
+    ]);
+    return { previous };
+  },
+  onError: (_err, _newTodo, context) => {
+    // Roll back on failure
+    if (context?.previous !== undefined) {
+      queryClient.setQueryData(['todos'], context.previous);
+    }
+  },
+  onSettled: () => {
+    queryClient.invalidateQueries(['todos']);
+  },
+});
+```
+
 ## Running the Examples
 
 ### React Demo
@@ -304,7 +337,7 @@ running with production-grade infrastructure inside a day.
 - **Window-focus & network-reconnect refetching**
 - **Polling intervals**
 - **Infinite & paginated queries**
-- **Optimistic updates & rollback**
+- ~~**Optimistic updates & rollback**~~ ✅
 - **Devtools**
 - **SSR prefetch & hydration**
 - **GraphQL adapter** (`@ts-query/graphql` — HTTP + `TypedDocumentNode` + APQ)

@@ -828,6 +828,56 @@ describe('QueryClient with SharedCache (L2)', () => {
       expect(aborted).toEqual([true]);
     });
 
+    it('optimistic update + rollback via setQueryData and onMutate context', async () => {
+      const client = new QueryClient();
+      const queryFn = vi.fn().mockResolvedValue([{ id: 1, text: 'first' }]);
+      const query = client.getQuery<{ id: number; text: string }[]>({
+        queryKey: ['todos'],
+        queryFn,
+        staleTime: 60_000,
+      });
+      await query.fetch();
+      expect(client.getQueryData(['todos'])).toEqual([
+        { id: 1, text: 'first' },
+      ]);
+
+      const error = new Error('server rejected');
+      const mutation = client.createMutation<
+        unknown,
+        { id: number; text: string },
+        Error,
+        { previous: { id: number; text: string }[] | undefined }
+      >({
+        mutationFn: async () => {
+          throw error;
+        },
+        onMutate: (newTodo) => {
+          const previous = client.getQueryData<{ id: number; text: string }[]>([
+            'todos',
+          ]);
+          client.setQueryData<{ id: number; text: string }[]>(
+            ['todos'],
+            (prev) => [...(prev ?? []), newTodo],
+          );
+          return { previous };
+        },
+        onError: (_err, _vars, context) => {
+          if (context?.previous !== undefined) {
+            client.setQueryData(['todos'], context.previous);
+          }
+        },
+      });
+
+      await expect(
+        mutation.mutate({ id: 2, text: 'optimistic' }),
+      ).rejects.toThrow(error);
+
+      // Rollback restored the original value
+      expect(client.getQueryData(['todos'])).toEqual([
+        { id: 1, text: 'first' },
+      ]);
+    });
+
     it('cancelQueries with no key aborts all in-flight fetches', () => {
       const client = new QueryClient();
       const signals: AbortSignal[] = [];

@@ -215,10 +215,15 @@ export class QueryClient {
     }
   }
 
-  createMutation<TData = unknown, TVariables = unknown, TError = Error>(
-    options: MutationOptions<TData, TVariables, TError>,
-  ): Mutation<TData, TVariables, TError> {
-    return new Mutation<TData, TVariables, TError>(options);
+  createMutation<
+    TData = unknown,
+    TVariables = unknown,
+    TError = Error,
+    TContext = unknown,
+  >(
+    options: MutationOptions<TData, TVariables, TError, TContext>,
+  ): Mutation<TData, TVariables, TError, TContext> {
+    return new Mutation<TData, TVariables, TError, TContext>(options);
   }
 
   /**
