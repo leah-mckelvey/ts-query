@@ -17,8 +17,9 @@ export function useMutation<
   TData = unknown,
   TVariables = unknown,
   TError = Error,
+  TContext = unknown,
 >(
-  options: MutationOptions<TData, TVariables, TError>,
+  options: MutationOptions<TData, TVariables, TError, TContext>,
 ): UseMutationResult<TData, TVariables, TError> {
   const client = useQueryClient();
   const mutationRef = useRef(client.createMutation(options));

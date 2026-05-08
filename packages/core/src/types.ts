@@ -85,15 +85,32 @@ export interface MutationOptions<
   TData = unknown,
   TVariables = unknown,
   TError = Error,
+  TContext = unknown,
 > {
   mutationFn: (variables: TVariables) => Promise<TData>;
-  onSuccess?: (data: TData, variables: TVariables) => void;
-  onError?: (error: TError, variables: TVariables) => void;
+  /**
+   * Runs before mutationFn. Use it to optimistically update the cache and
+   * snapshot the previous value. Whatever you return is threaded as the
+   * `context` argument to onSuccess/onError/onSettled — this is how rollback
+   * works: stash the previous data here, restore it from onError.
+   */
+  onMutate?: (variables: TVariables) => Promise<TContext> | TContext;
+  onSuccess?: (
+    data: TData,
+    variables: TVariables,
+    context: TContext | undefined,
+  ) => void | Promise<void>;
+  onError?: (
+    error: TError,
+    variables: TVariables,
+    context: TContext | undefined,
+  ) => void | Promise<void>;
   onSettled?: (
     data: TData | undefined,
     error: TError | null,
     variables: TVariables,
-  ) => void;
+    context: TContext | undefined,
+  ) => void | Promise<void>;
 }
 
 export interface MutationState<TData = unknown, TError = Error> {

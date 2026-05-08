@@ -43,14 +43,15 @@ export function createMutationComponent<
   TData = unknown,
   TVariables = unknown,
   TError = Error,
+  TContext = unknown,
 >(
-  options: MutationOptions<TData, TVariables, TError>,
+  options: MutationOptions<TData, TVariables, TError, TContext>,
 ): m.Component<{
   children: (
     result: UseMutationResult<TData, TVariables, TError>,
   ) => m.Children;
 }> {
-  let mutation: Mutation<TData, TVariables, TError>;
+  let mutation: Mutation<TData, TVariables, TError, TContext>;
 
   return {
     oninit() {
@@ -103,8 +104,9 @@ export function useMutation<
   TData = unknown,
   TVariables = unknown,
   TError = Error,
+  TContext = unknown,
 >(
-  options: MutationOptions<TData, TVariables, TError>,
+  options: MutationOptions<TData, TVariables, TError, TContext>,
 ): UseMutationResult<TData, TVariables, TError> {
   const client = getQueryClient();
   const mutation = client.createMutation(options);

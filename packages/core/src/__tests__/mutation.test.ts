@@ -55,7 +55,7 @@ describe('Mutation', () => {
 
     await mutation.mutate('test');
 
-    expect(onSuccess).toHaveBeenCalledWith('result: test', 'test');
+    expect(onSuccess).toHaveBeenCalledWith('result: test', 'test', undefined);
   });
 
   it('should call onError callback', async () => {
@@ -70,7 +70,7 @@ describe('Mutation', () => {
 
     await expect(mutation.mutate('input')).rejects.toThrow();
 
-    expect(onError).toHaveBeenCalledWith(error, 'input');
+    expect(onError).toHaveBeenCalledWith(error, 'input', undefined);
   });
 
   it('should call onSettled callback on success', async () => {
@@ -82,7 +82,12 @@ describe('Mutation', () => {
 
     await mutation.mutate('test');
 
-    expect(onSettled).toHaveBeenCalledWith('result: test', null, 'test');
+    expect(onSettled).toHaveBeenCalledWith(
+      'result: test',
+      null,
+      'test',
+      undefined,
+    );
   });
 
   it('should call onSettled callback on error', async () => {
@@ -97,7 +102,12 @@ describe('Mutation', () => {
 
     await expect(mutation.mutate('input')).rejects.toThrow();
 
-    expect(onSettled).toHaveBeenCalledWith(undefined, error, 'input');
+    expect(onSettled).toHaveBeenCalledWith(
+      undefined,
+      error,
+      'input',
+      undefined,
+    );
   });
 
   it('should notify subscribers on state change', async () => {
@@ -149,5 +159,104 @@ describe('Mutation', () => {
     await mutation.mutate('input');
 
     expect(subscriber).not.toHaveBeenCalled();
+  });
+
+  describe('onMutate / optimistic updates', () => {
+    it('threads onMutate context to onSuccess', async () => {
+      const onSuccess = vi.fn();
+      const mutation = new Mutation<
+        string,
+        string,
+        Error,
+        { snapshot: string }
+      >({
+        mutationFn: async () => 'result',
+        onMutate: () => ({ snapshot: 'before' }),
+        onSuccess,
+      });
+      await mutation.mutate('input');
+      expect(onSuccess).toHaveBeenCalledWith('result', 'input', {
+        snapshot: 'before',
+      });
+    });
+
+    it('threads onMutate context to onError for rollback', async () => {
+      const onError = vi.fn();
+      const error = new Error('boom');
+      const mutation = new Mutation<
+        string,
+        string,
+        Error,
+        { snapshot: string }
+      >({
+        mutationFn: async () => {
+          throw error;
+        },
+        onMutate: () => ({ snapshot: 'before' }),
+        onError,
+      });
+      await expect(mutation.mutate('input')).rejects.toThrow(error);
+      expect(onError).toHaveBeenCalledWith(error, 'input', {
+        snapshot: 'before',
+      });
+    });
+
+    it('awaits async onMutate before running mutationFn', async () => {
+      const order: string[] = [];
+      const mutation = new Mutation<string, string, Error, void>({
+        onMutate: async () => {
+          await new Promise((r) => setTimeout(r, 0));
+          order.push('onMutate');
+        },
+        mutationFn: async () => {
+          order.push('mutationFn');
+          return 'ok';
+        },
+      });
+      await mutation.mutate('x');
+      expect(order).toEqual(['onMutate', 'mutationFn']);
+    });
+
+    it('threads context through onSettled regardless of outcome', async () => {
+      const onSettled = vi.fn();
+      const okMutation = new Mutation<string, string, Error, { tag: string }>({
+        mutationFn: async () => 'ok',
+        onMutate: () => ({ tag: 'A' }),
+        onSettled,
+      });
+      await okMutation.mutate('x');
+      expect(onSettled).toHaveBeenCalledWith('ok', null, 'x', { tag: 'A' });
+
+      const error = new Error('fail');
+      const errMutation = new Mutation<string, string, Error, { tag: string }>({
+        mutationFn: async () => {
+          throw error;
+        },
+        onMutate: () => ({ tag: 'B' }),
+        onSettled,
+      });
+      await expect(errMutation.mutate('y')).rejects.toThrow(error);
+      expect(onSettled).toHaveBeenLastCalledWith(undefined, error, 'y', {
+        tag: 'B',
+      });
+    });
+
+    it('treats an onMutate failure like a mutation error with no context', async () => {
+      const onMutateError = new Error('snapshot failed');
+      const mutationFn = vi.fn();
+      const onError = vi.fn();
+      const mutation = new Mutation<string, string, Error, unknown>({
+        mutationFn,
+        onMutate: () => {
+          throw onMutateError;
+        },
+        onError,
+      });
+      await expect(mutation.mutate('x')).rejects.toThrow(onMutateError);
+      // mutationFn must NOT run if onMutate fails — otherwise we'd be doing
+      // a real network call without the snapshot needed for rollback.
+      expect(mutationFn).not.toHaveBeenCalled();
+      expect(onError).toHaveBeenCalledWith(onMutateError, 'x', undefined);
+    });
   });
 });
