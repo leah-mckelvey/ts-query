@@ -94,11 +94,19 @@ export class Query<TData = unknown, TError = Error> {
     );
   }
 
-  subscribe(observer: {
-    next: (state: QueryState<TData, TError>) => void;
-    error?: (err: unknown) => void;
-    complete?: () => void;
-  }): () => void {
+  subscribe(
+    observerOrCallback:
+      | {
+          next: (state: QueryState<TData, TError>) => void;
+          error?: (err: unknown) => void;
+          complete?: () => void;
+        }
+      | ((state: QueryState<TData, TError>) => void),
+  ): () => void {
+    const observer =
+      typeof observerOrCallback === 'function'
+        ? { next: observerOrCallback }
+        : observerOrCallback;
     // While there is at least one subscriber, the query is considered "in use",
     // so ensure any pending garbage-collection timer is cleared.
     const isFirstSubscriber = this.subscriberCount === 0;

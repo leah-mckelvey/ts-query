@@ -169,7 +169,9 @@ function MutationPanel() {
       alert('Please enter a new name');
       return;
     }
-    mutation.mutate({ name: newName });
+    mutation.mutate({ name: newName }).catch(() => {
+      // Error is reflected in mutation.state
+    });
     setNewName('');
   };
 
@@ -203,16 +205,16 @@ function MutationPanel() {
             flex: 1,
           }}
         />
-        <button onClick={handleUpdate} disabled={mutation.status === 'pending'}>
-          {mutation.status === 'pending' ? 'Updating...' : 'Update User #1'}
+        <button onClick={handleUpdate} disabled={mutation.state.status === 'loading'}>
+          {mutation.state.status === 'loading' ? 'Updating...' : 'Update User #1'}
         </button>
       </div>
-      {mutation.status === 'error' && (
+      {mutation.state.status === 'error' && (
         <div style={{ marginTop: '10px', color: '#dc3545' }}>
-          Error: {(mutation.error as Error)?.message}
+          Error: {(mutation.state.error as Error)?.message}
         </div>
       )}
-      {mutation.status === 'success' && (
+      {mutation.state.status === 'success' && (
         <div style={{ marginTop: '10px', color: '#28a745' }}>
           ✓ Mutation succeeded! All queries should update instantly.
         </div>
