@@ -2,100 +2,222 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NormalizedCache } from '../normalized-cache';
 import { QueryClient } from '../query-client';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// ########################################
+// TEST INFRASTRUCTURE
+// ########################################
+
+// ##############################
+// Test Data Factories
+// ##############################
 
 function makeUser(id: number, name: string) {
   return { __typename: 'User', id, name };
 }
 
-function makePost(id: number, title: string, author: ReturnType<typeof makeUser>) {
+function makePost(
+  id: number,
+  title: string,
+  author: ReturnType<typeof makeUser>,
+) {
   return { __typename: 'Post', id, title, author };
 }
 
-// ---------------------------------------------------------------------------
-// NormalizedCache unit tests
-// ---------------------------------------------------------------------------
+// ##############################
+// Test Scenario Builders
+// ##############################
+
+// ####################
+// Cache Scenarios
+// ####################
+
+type CacheScenario<T> = {
+  cache: NormalizedCache;
+  shape: unknown;
+  data: T;
+};
+
+function setupCacheWith<T>(
+  data: T,
+  key: string,
+  config?: ConstructorParameters<typeof NormalizedCache>[0],
+): CacheScenario<T> {
+  const cache = new NormalizedCache(config);
+  const shape = cache.normalize(data, key);
+  return { cache, shape, data };
+}
+
+// ####################
+// Query Scenarios
+// ####################
+
+type QueryScenario<T> = {
+  client: QueryClient;
+  query: ReturnType<QueryClient['getQuery']>;
+  queryFn: ReturnType<typeof vi.fn>;
+  expectedData: T;
+};
+
+async function setupQueryWith<T>(
+  queryKey: string,
+  data: T | T[],
+): Promise<QueryScenario<T>> {
+  const client = new QueryClient({ normalizedCache: {} });
+  const queryFn = Array.isArray(data)
+    ? vi.fn()
+    : vi.fn().mockResolvedValue(data);
+
+  if (Array.isArray(data)) {
+    data.forEach((value) => queryFn.mockResolvedValueOnce(value));
+  }
+
+  const query = client.getQuery({ queryKey, queryFn, retry: 0 });
+  await query.fetch();
+  return {
+    client,
+    query,
+    queryFn,
+    expectedData: Array.isArray(data) ? data[0] : data,
+  };
+}
+
+// ##############################
+// Test Utilities
+// ##############################
+
+class UpdateCollector<T> {
+  private updates: T[] = [];
+
+  subscribe(query: ReturnType<QueryClient['getQuery']>) {
+    query.subscribe((state) => this.updates.push(state.data as T));
+  }
+
+  get latest(): T {
+    return this.updates.at(-1)!;
+  }
+
+  get all(): readonly T[] {
+    return this.updates;
+  }
+}
+
+function expectAffectedKeys(
+  actual: string[],
+  expected: { includes: string[]; excludes?: string[] },
+) {
+  expected.includes.forEach((key) => expect(actual).toContain(key));
+  expected.excludes?.forEach((key) => expect(actual).not.toContain(key));
+  if (expected.excludes === undefined) {
+    expect(actual).toHaveLength(expected.includes.length);
+  }
+}
+
+// ########################################
+// NORMALIZEDCACHE UNIT TESTS
+// ########################################
 
 describe('NormalizedCache', () => {
-  describe('writeQuery / readQuery', () => {
-    it('stores and retrieves a flat object', () => {
-      const cache = new NormalizedCache();
-      const data = makeUser(1, 'Alice');
-      cache.writeQuery('users:1', data);
-      expect(cache.readQuery('users:1')).toEqual(data);
+  // ##############################
+  // Core Normalization/Denormalization
+  // ##############################
+
+  describe('normalize / denormalize', () => {
+    it('normalizes and denormalizes a flat object', () => {
+      const { cache, shape, data } = setupCacheWith(
+        makeUser(1, 'Alice'),
+        'users:1',
+      );
+      expect(cache.denormalize(shape)).toEqual(data);
     });
 
-    it('stores and reconstructs nested entities', () => {
-      const cache = new NormalizedCache();
+    it('normalizes and reconstructs nested entities', () => {
       const post = makePost(10, 'Hello', makeUser(1, 'Alice'));
-      cache.writeQuery('post:10', post);
-      expect(cache.readQuery('post:10')).toEqual(post);
+      const { cache, shape } = setupCacheWith(post, 'post:10');
+      expect(cache.denormalize(shape)).toEqual(post);
     });
 
-    it('stores and reconstructs arrays of entities', () => {
-      const cache = new NormalizedCache();
+    it('normalizes and reconstructs arrays of entities', () => {
       const data = [makeUser(1, 'Alice'), makeUser(2, 'Bob')];
-      cache.writeQuery('users', data);
-      expect(cache.readQuery('users')).toEqual(data);
+      const { cache, shape } = setupCacheWith(data, 'users');
+      expect(cache.denormalize(shape)).toEqual(data);
     });
 
-    it('returns undefined for unknown query key', () => {
+    it('returns denormalized value for any shape', () => {
       const cache = new NormalizedCache();
-      expect(cache.readQuery('missing')).toBeUndefined();
+      const plainData = { foo: 'bar' };
+      expect(cache.denormalize(plainData)).toEqual(plainData);
     });
 
     it('passes through values without __typename unchanged', () => {
-      const cache = new NormalizedCache();
       const data = { foo: 'bar', nested: { baz: 42 } };
-      cache.writeQuery('misc', data);
-      expect(cache.readQuery('misc')).toEqual(data);
+      const { cache, shape } = setupCacheWith(data, 'misc');
+      expect(cache.denormalize(shape)).toEqual(data);
     });
   });
+
+  // ##############################
+  // Entity Deduplication & Merging
+  // ##############################
 
   describe('entity deduplication', () => {
     it('shares entities across queries', () => {
       const cache = new NormalizedCache();
-      cache.writeQuery('post:1', makePost(1, 'First', makeUser(42, 'Alice')));
-      cache.writeQuery('post:2', makePost(2, 'Second', makeUser(42, 'Alice')));
+      const shape1 = cache.normalize(
+        makePost(1, 'First', makeUser(42, 'Alice')),
+        'post:1',
+      );
+      const shape2 = cache.normalize(
+        makePost(2, 'Second', makeUser(42, 'Alice')),
+        'post:2',
+      );
 
       // Both posts reference the same User:42 — update it once
       cache.writeFragment('User', 42, { name: 'Alicia' });
 
-      const post1 = cache.readQuery('post:1') as ReturnType<typeof makePost>;
-      const post2 = cache.readQuery('post:2') as ReturnType<typeof makePost>;
+      const post1 = cache.denormalize(shape1) as ReturnType<typeof makePost>;
+      const post2 = cache.denormalize(shape2) as ReturnType<typeof makePost>;
       expect((post1.author as { name: string }).name).toBe('Alicia');
       expect((post2.author as { name: string }).name).toBe('Alicia');
     });
 
     it('merges entity fields on subsequent writes', () => {
       const cache = new NormalizedCache();
-      cache.writeQuery('u', makeUser(1, 'Alice'));
-      cache.writeQuery('u2', { __typename: 'User', id: 1, email: 'alice@example.com' });
+      cache.normalize(makeUser(1, 'Alice'), 'u');
+      cache.normalize(
+        { __typename: 'User', id: 1, email: 'alice@example.com' },
+        'u2',
+      );
 
       const user = cache.readFragment('User', 1);
-      expect(user).toMatchObject({ id: 1, name: 'Alice', email: 'alice@example.com' });
+      expect(user).toMatchObject({
+        id: 1,
+        name: 'Alice',
+        email: 'alice@example.com',
+      });
     });
   });
 
+  // ##############################
+  // Fragment Operations
+  // ##############################
+
+  // ####################
+  // writeFragment
+  // ####################
+
   describe('writeFragment', () => {
-    it('updates an entity and reflects in readQuery', () => {
-      const cache = new NormalizedCache();
-      cache.writeQuery('user:1', makeUser(1, 'Alice'));
+    it('updates an entity and reflects in denormalization', () => {
+      const { cache, shape } = setupCacheWith(makeUser(1, 'Alice'), 'user:1');
       cache.writeFragment('User', 1, { name: 'Bob' });
-      expect((cache.readQuery('user:1') as { name: string }).name).toBe('Bob');
+      expect((cache.denormalize(shape) as { name: string }).name).toBe('Bob');
     });
 
-    it('notifies query listeners', () => {
+    it('returns affected query keys', () => {
       const cache = new NormalizedCache();
-      cache.writeQuery('user:1', makeUser(1, 'Alice'));
+      cache.normalize(makeUser(1, 'Alice'), 'user:1');
+      cache.normalize(makePost(1, 'Post', makeUser(1, 'Alice')), 'post:1');
 
-      const listener = vi.fn();
-      cache.registerQueryListener('user:1', listener);
-
-      cache.writeFragment('User', 1, { name: 'Bob' });
-      expect(listener).toHaveBeenCalledTimes(1);
+      const affectedKeys = cache.writeFragment('User', 1, { name: 'Bob' });
+      expectAffectedKeys(affectedKeys, { includes: ['user:1', 'post:1'] });
     });
 
     it('notifies entity listeners', () => {
@@ -107,18 +229,22 @@ describe('NormalizedCache', () => {
       expect(listener).toHaveBeenCalledTimes(1);
     });
 
-    it('does not notify listeners for unrelated entities', () => {
+    it('does not return keys for unrelated entities', () => {
       const cache = new NormalizedCache();
-      cache.writeQuery('user:1', makeUser(1, 'Alice'));
-      cache.writeQuery('user:2', makeUser(2, 'Bob'));
+      cache.normalize(makeUser(1, 'Alice'), 'user:1');
+      cache.normalize(makeUser(2, 'Bob'), 'user:2');
 
-      const listener = vi.fn();
-      cache.registerQueryListener('user:1', listener);
-
-      cache.writeFragment('User', 2, { name: 'Robert' });
-      expect(listener).not.toHaveBeenCalled();
+      const affectedKeys = cache.writeFragment('User', 2, { name: 'Robert' });
+      expectAffectedKeys(affectedKeys, {
+        includes: ['user:2'],
+        excludes: ['user:1'],
+      });
     });
   });
+
+  // ####################
+  // readFragment
+  // ####################
 
   describe('readFragment', () => {
     it('returns undefined for unknown entity', () => {
@@ -126,40 +252,44 @@ describe('NormalizedCache', () => {
       expect(cache.readFragment('User', 99)).toBeUndefined();
     });
 
-    it('returns cached entity after writeQuery', () => {
+    it('returns cached entity after normalize', () => {
       const cache = new NormalizedCache();
-      cache.writeQuery('user:1', makeUser(1, 'Alice'));
-      expect(cache.readFragment('User', 1)).toMatchObject({ id: 1, name: 'Alice' });
+      cache.normalize(makeUser(1, 'Alice'), 'user:1');
+      expect(cache.readFragment('User', 1)).toMatchObject({
+        id: 1,
+        name: 'Alice',
+      });
     });
   });
 
+  // ##############################
+  // Entity Eviction
+  // ##############################
+
   describe('evict', () => {
     it('removes the entity from the store', () => {
-      const cache = new NormalizedCache();
-      cache.writeQuery('user:1', makeUser(1, 'Alice'));
+      const { cache } = setupCacheWith(makeUser(1, 'Alice'), 'user:1');
       cache.evict('User', 1);
       expect(cache.readFragment('User', 1)).toBeUndefined();
     });
 
     it('returns affected query keys', () => {
       const cache = new NormalizedCache();
-      cache.writeQuery('user:1', makeUser(1, 'Alice'));
-      cache.writeQuery('post:1', makePost(1, 'Post', makeUser(1, 'Alice')));
+      cache.normalize(makeUser(1, 'Alice'), 'user:1');
+      cache.normalize(makePost(1, 'Post', makeUser(1, 'Alice')), 'post:1');
       const affected = cache.evict('User', 1);
-      expect(affected).toContain('user:1');
-      expect(affected).toContain('post:1');
+      expectAffectedKeys(affected, { includes: ['user:1', 'post:1'] });
     });
 
-    it('readQuery returns undefined for evicted entities', () => {
-      const cache = new NormalizedCache();
-      cache.writeQuery('user:1', makeUser(1, 'Alice'));
+    it('denormalize returns undefined for evicted entities', () => {
+      const { cache, shape } = setupCacheWith(makeUser(1, 'Alice'), 'user:1');
       cache.evict('User', 1);
-      expect(cache.readQuery('user:1')).toBeUndefined();
+      expect(cache.denormalize(shape)).toBeUndefined();
     });
 
     it('notifies entity listeners on evict', () => {
       const cache = new NormalizedCache();
-      cache.writeQuery('user:1', makeUser(1, 'Alice'));
+      cache.normalize(makeUser(1, 'Alice'), 'user:1');
       const listener = vi.fn();
       cache.subscribeToEntity('User', 1, listener);
       cache.evict('User', 1);
@@ -167,29 +297,39 @@ describe('NormalizedCache', () => {
     });
   });
 
+  // ##############################
+  // Type Policies
+  // ##############################
+
   describe('TypePolicy', () => {
     it('supports custom keyFields string', () => {
-      const cache = new NormalizedCache({
+      const data = { __typename: 'Product', sku: 'ABC-123', price: 9.99 };
+      const { cache } = setupCacheWith(data, 'product', {
         typePolicies: { Product: { keyFields: 'sku' } },
       });
-      const data = { __typename: 'Product', sku: 'ABC-123', price: 9.99 };
-      cache.writeQuery('product', data);
-      expect(cache.readFragment('Product', 'ABC-123')).toMatchObject({ sku: 'ABC-123' });
+      expect(cache.readFragment('Product', 'ABC-123')).toMatchObject({
+        sku: 'ABC-123',
+      });
     });
 
     it('supports composite keyFields array', () => {
-      const cache = new NormalizedCache({
+      const data = {
+        __typename: 'OrgMember',
+        orgId: 'org1',
+        userId: 'user1',
+        role: 'admin',
+      };
+      const { cache, shape } = setupCacheWith(data, 'member', {
         typePolicies: { OrgMember: { keyFields: ['orgId', 'userId'] } },
       });
-      const data = { __typename: 'OrgMember', orgId: 'org1', userId: 'user1', role: 'admin' };
-      cache.writeQuery('member', data);
       // Internal ref is "OrgMember:org1:user1"
       cache.writeFragment('OrgMember', 'org1:user1', { role: 'owner' });
-      expect((cache.readQuery('member') as typeof data).role).toBe('owner');
+      expect((cache.denormalize(shape) as typeof data).role).toBe('owner');
     });
 
     it('supports custom merge function', () => {
-      const cache = new NormalizedCache({
+      const feed1 = { __typename: 'Feed', id: '1', items: ['a', 'b'] };
+      const { cache } = setupCacheWith(feed1, 'feed', {
         typePolicies: {
           Feed: {
             merge: (existing, incoming) => ({
@@ -202,14 +342,16 @@ describe('NormalizedCache', () => {
           },
         },
       });
-      const feed1 = { __typename: 'Feed', id: '1', items: ['a', 'b'] };
       const feed2 = { __typename: 'Feed', id: '1', items: ['c'] };
-      cache.writeQuery('feed', feed1);
-      cache.writeQuery('feed2', feed2); // second write merges
+      cache.normalize(feed2, 'feed2'); // second write merges
       const result = cache.readFragment('Feed', '1') as { items: string[] };
       expect(result.items).toEqual(['a', 'b', 'c']);
     });
   });
+
+  // ##############################
+  // Entity Subscriptions
+  // ##############################
 
   describe('subscribeToEntity', () => {
     it('unsubscribe stops notifications', () => {
@@ -223,9 +365,9 @@ describe('NormalizedCache', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// QueryClient integration tests
-// ---------------------------------------------------------------------------
+// ########################################
+// QUERYCLIENT INTEGRATION TESTS
+// ########################################
 
 describe('QueryClient + normalized cache', () => {
   let client: QueryClient;
@@ -236,49 +378,28 @@ describe('QueryClient + normalized cache', () => {
     });
   });
 
-  it('writeFragment pushes updated data to subscribed queries', async () => {
-    const queryFn = vi.fn().mockResolvedValue(makeUser(1, 'Alice'));
-    const query = client.getQuery({ queryKey: 'user:1', queryFn, retry: 0 });
-    await query.fetch();
+  // ##############################
+  // Fragment Operations Integration
+  // ##############################
 
-    const updates: unknown[] = [];
-    query.subscribe((state) => updates.push(state.data));
+  // ####################
+  // writeFragment
+  // ####################
+
+  it('writeFragment pushes updated data to subscribed queries', async () => {
+    const { client, query, queryFn } = await setupQueryWith(
+      'user:1',
+      makeUser(1, 'Alice'),
+    );
+
+    const updates = new UpdateCollector<ReturnType<typeof makeUser>>();
+    updates.subscribe(query);
 
     client.writeFragment('User', 1, { name: 'Alicia' });
 
-    const latest = updates.at(-1) as ReturnType<typeof makeUser>;
-    expect(latest.name).toBe('Alicia');
+    expect(updates.latest.name).toBe('Alicia');
     // queryFn should NOT have been called again
     expect(queryFn).toHaveBeenCalledTimes(1);
-  });
-
-  it('readFragment returns entity after query fetch', async () => {
-    const queryFn = vi.fn().mockResolvedValue(makeUser(7, 'Dave'));
-    const query = client.getQuery({ queryKey: 'user:7', queryFn, retry: 0 });
-    await query.fetch();
-
-    expect(client.readFragment('User', 7)).toMatchObject({ id: 7, name: 'Dave' });
-  });
-
-  it('readFragment returns undefined when normalized cache is not configured', async () => {
-    const plainClient = new QueryClient();
-    expect(plainClient.readFragment('User', 1)).toBeUndefined();
-  });
-
-  it('evict invalidates referencing queries and triggers refetch', async () => {
-    const queryFn = vi
-      .fn()
-      .mockResolvedValueOnce(makeUser(1, 'Alice'))
-      .mockResolvedValueOnce(makeUser(1, 'Alice (refreshed)'));
-
-    const query = client.getQuery({ queryKey: 'user:1', queryFn, retry: 0 });
-    await query.fetch();
-    expect(queryFn).toHaveBeenCalledTimes(1);
-
-    client.evict('User', 1);
-
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(queryFn).toHaveBeenCalledTimes(2);
   });
 
   it('multiple queries sharing an entity all update on writeFragment', async () => {
@@ -296,17 +417,54 @@ describe('QueryClient + normalized cache', () => {
 
     await Promise.all([q1.fetch(), q2.fetch()]);
 
-    const q1Updates: unknown[] = [];
-    const q2Updates: unknown[] = [];
-    q1.subscribe((s) => q1Updates.push(s.data));
-    q2.subscribe((s) => q2Updates.push(s.data));
+    const q1Updates = new UpdateCollector<ReturnType<typeof makeUser>>();
+    const q2Updates = new UpdateCollector<ReturnType<typeof makePost>>();
+    q1Updates.subscribe(q1);
+    q2Updates.subscribe(q2);
 
     client.writeFragment('User', 5, { name: 'Evelyn' });
 
-    expect((q1Updates.at(-1) as ReturnType<typeof makeUser>).name).toBe('Evelyn');
-    const q2Latest = q2Updates.at(-1) as ReturnType<typeof makePost>;
-    expect((q2Latest.author as { name: string }).name).toBe('Evelyn');
+    expect(q1Updates.latest.name).toBe('Evelyn');
+    expect((q2Updates.latest.author as { name: string }).name).toBe('Evelyn');
   });
+
+  // ####################
+  // readFragment
+  // ####################
+
+  it('readFragment returns entity after query fetch', async () => {
+    const { client } = await setupQueryWith('user:7', makeUser(7, 'Dave'));
+    expect(client.readFragment('User', 7)).toMatchObject({
+      id: 7,
+      name: 'Dave',
+    });
+  });
+
+  it('readFragment returns undefined when normalized cache is not configured', async () => {
+    const plainClient = new QueryClient();
+    expect(plainClient.readFragment('User', 1)).toBeUndefined();
+  });
+
+  // ##############################
+  // Eviction & Cache Invalidation
+  // ##############################
+
+  it('evict invalidates referencing queries and triggers refetch', async () => {
+    const { client, queryFn } = await setupQueryWith('user:1', [
+      makeUser(1, 'Alice'),
+      makeUser(1, 'Alice (refreshed)'),
+    ]);
+    expect(queryFn).toHaveBeenCalledTimes(1);
+
+    client.evict('User', 1);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(queryFn).toHaveBeenCalledTimes(2);
+  });
+
+  // ##############################
+  // Backwards Compatibility
+  // ##############################
 
   it('queries without normalized cache work unchanged', async () => {
     const plainClient = new QueryClient();
