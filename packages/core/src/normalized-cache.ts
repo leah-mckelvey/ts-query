@@ -1,5 +1,9 @@
 import type { TypePolicy, NormalizedCacheConfig } from './types';
 
+// #######################################
+// TYPE DEFINITIONS
+// #######################################
+
 /**
  * A reference to a normalized entity in the cache.
  * Format: "TypeName:id"
@@ -7,6 +11,10 @@ import type { TypePolicy, NormalizedCacheConfig } from './types';
 export interface EntityRef {
   __ref: string;
 }
+
+// #######################################
+// TYPE GUARDS
+// #######################################
 
 function isEntityRef(value: unknown): value is EntityRef {
   return (
@@ -21,42 +29,47 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+// #######################################
+// NORMALIZED CACHE
+// #######################################
+
 /**
  * Normalized entity store for GraphQL responses.
  *
  * Entities are identified by their __typename + key field(s) and stored in a
- * flat map ("User:42" → fields). Query results are stored as normalized shapes
- * (entity refs in place of inline objects) so that a single writeFragment call
- * propagates to every query that referenced that entity.
+ * flat map ("User:42" → fields). This simplified entity store focuses solely on
+ * entity management, with query coordination handled by QueryClient.
  *
  * Objects that lack __typename (or whose type has no resolvable key) pass
  * through unchanged, so non-GraphQL queries are unaffected.
  */
 export class NormalizedCache {
+  // ##############################
+  // STATE
+  // ##############################
+
   /** Flat entity store: "Type:id" → merged fields */
   private entities = new Map<string, Record<string, unknown>>();
 
-  /** Normalized query shapes: queryKey → shape with EntityRefs */
-  private shapes = new Map<string, unknown>();
-
   /** Reverse index: entity ref → query keys that reference it */
   private entityToQueries = new Map<string, Set<string>>();
-
-  /** Callbacks invoked when any entity referenced by a query changes */
-  private queryListeners = new Map<string, () => void>();
 
   /** Callbacks invoked when a specific entity changes (for useFragment) */
   private entityListeners = new Map<string, Set<() => void>>();
 
   private config: NormalizedCacheConfig;
 
+  // ##############################
+  // INITIALIZATION
+  // ##############################
+
   constructor(config: NormalizedCacheConfig = {}) {
     this.config = config;
   }
 
-  // ---------------------------------------------------------------------------
-  // Entity-level subscription (for useFragment)
-  // ---------------------------------------------------------------------------
+  // ##############################
+  // PUBLIC API: SUBSCRIPTIONS
+  // ##############################
 
   /**
    * Subscribe to changes for a specific entity.
@@ -69,73 +82,54 @@ export class NormalizedCache {
     callback: () => void,
   ): () => void {
     const ref = this.makeRef(typename, id);
-    if (!this.entityListeners.has(ref)) {
-      this.entityListeners.set(ref, new Set());
-    }
-    this.entityListeners.get(ref)!.add(callback);
+    this.ensureSet(this.entityListeners as Map<string, Set<unknown>>, ref).add(
+      callback,
+    );
     return () => {
       this.entityListeners.get(ref)?.delete(callback);
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Query-level API
-  // ---------------------------------------------------------------------------
+  // ##############################
+  // PUBLIC API: NORMALIZATION
+  // ##############################
 
   /**
-   * Register a callback to be invoked when any entity referenced by this
-   * query is updated via writeFragment or evict.
-   * Returns an unsubscribe function.
+   * Normalize a value and store entities in the entity store.
+   * Returns the normalized shape with entity refs.
+   * The queryKey is used to build the reverse index (entity → queries).
    */
-  registerQueryListener(queryKey: string, callback: () => void): () => void {
-    this.queryListeners.set(queryKey, callback);
-    return () => {
-      this.queryListeners.delete(queryKey);
-    };
+  normalize(data: unknown, queryKey: string): unknown {
+    return this.normalizeValue(data, queryKey);
   }
 
   /**
-   * Normalize a query result and store it.
-   * The original data is NOT mutated; entity refs replace nested entity objects
-   * in the stored shape only.
+   * Reconstruct denormalized data from a normalized shape.
    */
-  writeQuery(queryKey: string, data: unknown): void {
-    const shape = this.normalizeValue(data, queryKey);
-    this.shapes.set(queryKey, shape);
-  }
-
-  /**
-   * Reconstruct the full denormalized data for a query from the current
-   * entity store. Returns undefined if the query has never been written.
-   */
-  readQuery(queryKey: string): unknown {
-    const shape = this.shapes.get(queryKey);
-    if (shape === undefined) return undefined;
+  denormalize(shape: unknown): unknown {
     return this.denormalizeValue(shape);
   }
 
-  // ---------------------------------------------------------------------------
-  // Fragment / entity API
-  // ---------------------------------------------------------------------------
+  // ##############################
+  // PUBLIC API: FRAGMENT OPERATIONS
+  // ##############################
 
   /**
    * Update a specific entity. Merges `data` into the existing record (shallow
-   * merge of top-level fields) and notifies all queries that reference it.
+   * merge of top-level fields) and returns the query keys that reference it.
+   * The caller (QueryClient) is responsible for notifying affected queries.
    */
   writeFragment(
     typename: string,
     id: string | number,
     data: Record<string, unknown>,
-  ): void {
+  ): string[] {
     const ref = this.makeRef(typename, id);
     const existing = this.entities.get(ref) ?? {};
-    const policy = this.config.typePolicies?.[typename];
-    const merged = policy?.merge
-      ? policy.merge(existing, data)
-      : { ...existing, ...data };
+    const merged = this.mergeEntity(typename, existing, data);
     this.entities.set(ref, merged);
-    this.notifyQueries(ref);
     this.notifyEntityListeners(ref);
+    return this.getAffectedQueries(ref);
   }
 
   /**
@@ -155,16 +149,16 @@ export class NormalizedCache {
    */
   evict(typename: string, id: string | number): string[] {
     const ref = this.makeRef(typename, id);
+    const affected = this.getAffectedQueries(ref);
     this.entities.delete(ref);
-    const affected = [...(this.entityToQueries.get(ref) ?? [])];
     this.entityToQueries.delete(ref);
     this.notifyEntityListeners(ref);
     return affected;
   }
 
-  // ---------------------------------------------------------------------------
-  // Internals
-  // ---------------------------------------------------------------------------
+  // ##############################
+  // INTERNAL HELPERS: ENTITY REFS
+  // ##############################
 
   private makeRef(typename: string, id: string | number): string {
     return `${typename}:${id}`;
@@ -194,19 +188,98 @@ export class NormalizedCache {
     return this.makeRef(typename, keyValue as string | number);
   }
 
+  // ##############################
+  // INTERNAL HELPERS: ENTITY MERGING
+  // ##############################
+
+  /**
+   * Merge new data into an existing entity using the type's merge policy.
+   * Falls back to shallow merge if no custom merge function is defined.
+   */
+  private mergeEntity(
+    typename: string,
+    existing: Record<string, unknown>,
+    incoming: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const policy = this.config.typePolicies?.[typename];
+    return policy?.merge
+      ? policy.merge(existing, incoming)
+      : { ...existing, ...incoming };
+  }
+
+  // ##############################
+  // INTERNAL HELPERS: INDEX MANAGEMENT
+  // ##############################
+
+  /**
+   * Ensure a Set exists at the given key in a Map, creating it if needed.
+   * Returns the Set for chaining.
+   */
+  private ensureSet<K>(map: Map<K, Set<unknown>>, key: K): Set<unknown> {
+    if (!map.has(key)) {
+      map.set(key, new Set());
+    }
+    return map.get(key)!;
+  }
+
+  /**
+   * Get the list of query keys that reference a specific entity.
+   * Returns an empty array if the entity has no references.
+   */
+  private getAffectedQueries(ref: string): string[] {
+    return Array.from(this.entityToQueries.get(ref) ?? []);
+  }
+
+  // ##############################
+  // INTERNAL HELPERS: OBJECT TRANSFORMATION
+  // ##############################
+
+  /**
+   * Transform all values in an object using the given transformation function.
+   * Returns a new object with the same keys but transformed values.
+   */
+  private transformObjectValues(
+    obj: Record<string, unknown>,
+    transform: (value: unknown) => unknown,
+  ): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      result[k] = transform(v);
+    }
+    return result;
+  }
+
+  // ##############################
+  // CORE LOGIC: NORMALIZATION
+  // ##############################
+
   /** Recursively normalize a value, registering entity refs under queryKey. */
   private normalizeValue(value: unknown, queryKey: string): unknown {
+    // ####################
+    // Handle arrays
+    // ####################
+
     if (Array.isArray(value)) {
       return value.map((item) => this.normalizeValue(item, queryKey));
     }
 
+    // ####################
+    // Handle primitives and non-plain objects
+    // ####################
+
     if (!isPlainObject(value)) return value;
 
-    // Recursively normalize nested fields first
-    const normalized: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) {
-      normalized[k] = this.normalizeValue(v, queryKey);
-    }
+    // ####################
+    // Normalize nested fields
+    // ####################
+
+    const normalized = this.transformObjectValues(value, (v) =>
+      this.normalizeValue(v, queryKey),
+    );
+
+    // ####################
+    // Check if this object is an identifiable entity
+    // ####################
 
     const ref = this.getEntityRef(value);
     if (ref === null) {
@@ -214,31 +287,46 @@ export class NormalizedCache {
       return normalized;
     }
 
-    // Merge into entity store
+    // ####################
+    // Store entity and build reverse index
+    // ####################
+
     const existing = this.entities.get(ref) ?? {};
     const typename = value.__typename as string;
-    const policy = this.config.typePolicies?.[typename];
-    const merged = policy?.merge
-      ? policy.merge(existing, normalized)
-      : { ...existing, ...normalized };
+    const merged = this.mergeEntity(typename, existing, normalized);
     this.entities.set(ref, merged);
 
     // Track which query references this entity
-    if (!this.entityToQueries.has(ref)) {
-      this.entityToQueries.set(ref, new Set());
-    }
-    this.entityToQueries.get(ref)!.add(queryKey);
+    this.ensureSet(this.entityToQueries as Map<string, Set<unknown>>, ref).add(
+      queryKey,
+    );
 
     return { __ref: ref } satisfies EntityRef;
   }
 
+  // ##############################
+  // CORE LOGIC: DENORMALIZATION
+  // ##############################
+
   /** Recursively reconstruct a value by resolving entity refs. */
   private denormalizeValue(value: unknown): unknown {
+    // ####################
+    // Handle arrays
+    // ####################
+
     if (Array.isArray(value)) {
       return value.map((item) => this.denormalizeValue(item));
     }
 
+    // ####################
+    // Handle primitives and non-plain objects
+    // ####################
+
     if (!isPlainObject(value)) return value;
+
+    // ####################
+    // Resolve entity references
+    // ####################
 
     if (isEntityRef(value)) {
       const entity = this.entities.get(value.__ref);
@@ -246,21 +334,16 @@ export class NormalizedCache {
       return this.denormalizeValue(entity);
     }
 
-    const result: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value)) {
-      result[k] = this.denormalizeValue(v);
-    }
-    return result;
+    // ####################
+    // Recursively denormalize nested objects
+    // ####################
+
+    return this.transformObjectValues(value, (v) => this.denormalizeValue(v));
   }
 
-  /** Invoke listeners for all queries that reference the given entity ref. */
-  private notifyQueries(ref: string): void {
-    const affected = this.entityToQueries.get(ref);
-    if (!affected) return;
-    for (const queryKey of affected) {
-      this.queryListeners.get(queryKey)?.();
-    }
-  }
+  // ##############################
+  // INTERNAL HELPERS: NOTIFICATIONS
+  // ##############################
 
   /** Invoke direct entity listeners (e.g. useFragment subscribers). */
   private notifyEntityListeners(ref: string): void {

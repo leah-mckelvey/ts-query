@@ -130,10 +130,12 @@ describe('Query', () => {
     // BehaviorSubject emits current value immediately on subscribe ('idle')
     // Then auto-fetch triggers, emitting 'loading'
     await vi.waitFor(() => expect(subscriber).toHaveBeenCalledTimes(2));
-    expect(subscriber).toHaveBeenNthCalledWith(1,
+    expect(subscriber).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({ status: 'idle' }),
     );
-    expect(subscriber).toHaveBeenNthCalledWith(2,
+    expect(subscriber).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({ status: 'loading' }),
     );
 

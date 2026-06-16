@@ -24,13 +24,15 @@ class Query {
 
 // In React hook:
 useEffect(() => {
-  if (query.state.status === 'idle') {  // ❌ RACE CONDITION
+  if (query.state.status === 'idle') {
+    // ❌ RACE CONDITION
     query.fetch();
   }
 }, [query]);
 ```
 
 **The Race:**
+
 1. Component 1 effect runs: checks `status === 'idle'` → true → calls `fetch()`
 2. Component 2 effect runs **microseconds later**: checks `status === 'idle'` → **still true!** → calls `fetch()` again
 3. Both fetches start before the state updates to 'loading'
@@ -62,6 +64,7 @@ class Query {
 ```
 
 **How It Works:**
+
 1. First subscriber: `isFirstSubscriber === true` → triggers fetch → `state$.next({ status: 'loading' })` **immediately**
 2. Second subscriber (even microseconds later): `isFirstSubscriber === false` → **doesn't trigger fetch** → receives current 'loading' state from observable
 
@@ -120,6 +123,7 @@ This is the stampeding herd problem - observables solve it at the architectural 
   - Proper backpressure handling
 
 The alternative is reimplementing these patterns yourself, which:
+
 1. Adds complexity
 2. May have subtle bugs (like the race condition we just fixed)
 3. Still costs bundle size (just in your own code)
@@ -213,6 +217,7 @@ You might ask: "Do we need full RxJS? Could we use a simpler BehaviorSubject imp
 5. **Only 10KB**: Smaller than many state management libraries
 
 The alternative (custom observable implementation) would:
+
 - Still cost bundle size (~5-7KB for a good implementation)
 - Risk subtle bugs (like the one we just fixed)
 - Require ongoing maintenance
@@ -223,6 +228,7 @@ The alternative (custom observable implementation) would:
 **Observables aren't optional for this architecture - they're fundamental.**
 
 The "ask once, answer many" guarantee requires:
+
 - Hot observable streams
 - Synchronous state updates
 - Proper subscriber management

@@ -34,10 +34,7 @@ export type {
 // Mutation Types
 // ##############################
 
-export type {
-  MutationOptions,
-  MutationState,
-} from './types';
+export type { MutationOptions, MutationState } from './types';
 
 // ##############################
 // Cache Types

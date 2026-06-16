@@ -3,11 +3,7 @@
 // ########################################
 
 import { BehaviorSubject, type Observable } from 'rxjs';
-import type {
-  QueryOptions,
-  QueryState,
-  SharedCacheAdapter,
-} from './types';
+import type { QueryOptions, QueryState, SharedCacheAdapter } from './types';
 import { deriveStatusFlags, createInitialQueryState } from './types';
 import type { NormalizedCache } from './normalized-cache';
 
@@ -51,7 +47,6 @@ export interface NormalizedCacheContext {
 // ########################################
 // QUERY CLASS
 // ########################################
-
 
 export class Query<TData = unknown, TError = Error> {
   // ##############################
@@ -115,7 +110,11 @@ export class Query<TData = unknown, TError = Error> {
 
     // Auto-fetch on first subscriber if query is idle
     // This guarantees only ONE fetch happens, even with concurrent subscriptions
-    if (isFirstSubscriber && this.state.status === 'idle' && this.options.enabled !== false) {
+    if (
+      isFirstSubscriber &&
+      this.state.status === 'idle' &&
+      this.options.enabled !== false
+    ) {
       this.fetch().catch(() => {
         // Error already handled by Query class
       });
@@ -214,7 +213,6 @@ export class Query<TData = unknown, TError = Error> {
   // ####################
 
   private async executeFetch(): Promise<TData> {
-
     // Check if we should skip L2 (e.g., after invalidation)
     const shouldSkipSharedCache = this.skipSharedCacheOnNextFetch;
     this.skipSharedCacheOnNextFetch = false; // Reset flag
