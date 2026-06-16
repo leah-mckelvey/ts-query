@@ -58,8 +58,13 @@ export function createMutationComponent<
       mutation = client.createMutation(options);
 
       // Subscribe to mutation updates and trigger Mithril redraw
-      const unsubscribe = mutation.subscribe(() => {
-        m.redraw();
+      const unsubscribe = mutation.subscribe({
+        next: () => {
+          m.redraw();
+        },
+        error: (err) => {
+          console.error('Mutation observable error:', err);
+        },
       });
 
       // Store cleanup function in WeakMap (avoids memory leaks and type issues)
@@ -110,8 +115,13 @@ export function useMutation<
   const mutation = client.createMutation(options);
 
   // Subscribe to mutation updates and trigger Mithril redraw
-  const unsubscribe = mutation.subscribe(() => {
-    m.redraw();
+  const unsubscribe = mutation.subscribe({
+    next: () => {
+      m.redraw();
+    },
+    error: (err) => {
+      console.error('Mutation observable error:', err);
+    },
   });
 
   // Store cleanup function in WeakMap

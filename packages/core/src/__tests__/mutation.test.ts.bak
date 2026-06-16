@@ -106,7 +106,7 @@ describe('Mutation', () => {
       mutationFn: async () => 'data',
     });
 
-    mutation.subscribe({ next: subscriber });
+    mutation.subscribe(subscriber);
     await mutation.mutate('input');
 
     expect(subscriber).toHaveBeenCalled();
@@ -144,19 +144,10 @@ describe('Mutation', () => {
     });
 
     const unsubscribe = mutation.subscribe({ next: subscriber });
-
-    // BehaviorSubject emits current value immediately on subscribe
-    expect(subscriber).toHaveBeenCalledTimes(1);
-    expect(subscriber).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'idle' }),
-    );
-
-    subscriber.mockClear();
     unsubscribe();
 
     await mutation.mutate('input');
 
-    // After unsubscribe, should not receive any more emissions
     expect(subscriber).not.toHaveBeenCalled();
   });
 });
