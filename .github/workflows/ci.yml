@@ -20,9 +20,7 @@ jobs:
           node-version: 20.19.x
 
       - name: Install dependencies
-        run: |
-          npm install
-          npm install --force --no-save @rollup/rollup-linux-x64-gnu
+        run: npm install
 
       - name: Run full check (format, lint, build, tests+coverage)
         run: npm run check
