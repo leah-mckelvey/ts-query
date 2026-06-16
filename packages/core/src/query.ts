@@ -1,10 +1,23 @@
+// ########################################
+// IMPORTS
+// ########################################
+
+import { BehaviorSubject, type Observable } from 'rxjs';
 import type {
   QueryOptions,
   QueryState,
-  Subscriber,
   SharedCacheAdapter,
 } from './types';
+import { deriveStatusFlags, createInitialQueryState } from './types';
 import type { NormalizedCache } from './normalized-cache';
+
+// ########################################
+// TYPE DEFINITIONS
+// ########################################
+
+// ##############################
+// Cache Sentinel
+// ##############################
 
 /**
  * Unique sentinel symbol to distinguish "cache miss" from "cache returned null".
@@ -12,6 +25,10 @@ import type { NormalizedCache } from './normalized-cache';
  */
 const CACHE_MISS = Symbol('CACHE_MISS');
 type CacheMiss = typeof CACHE_MISS;
+
+// ##############################
+// Cache Context Types
+// ##############################
 
 /**
  * Context for shared cache (L2) operations, passed from QueryClient.
@@ -31,8 +48,16 @@ export interface NormalizedCacheContext {
   key: string;
 }
 
+// ########################################
+// QUERY CLASS
+// ########################################
+
+
 export class Query<TData = unknown, TError = Error> {
-  private subscribers = new Set<Subscriber<QueryState<TData, TError>>>();
+  // ##############################
+  // Fields
+  // ##############################
+  private state$: BehaviorSubject<QueryState<TData, TError>>;
   private options: QueryOptions<TData, TError>;
   private staleTimeout: ReturnType<typeof setTimeout> | null = null;
   private cacheTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -42,18 +67,20 @@ export class Query<TData = unknown, TError = Error> {
   private sharedCacheContext?: SharedCacheContext;
   private skipSharedCacheOnNextFetch = false;
   private normalizedCacheContext?: NormalizedCacheContext;
-  private unregisterNormalizedListener?: () => void;
+  private normalizedShape?: unknown;
+  private subscriberCount = 0;
 
-  state: QueryState<TData, TError> = {
-    status: 'idle',
-    data: undefined,
-    error: null,
-    isLoading: false,
-    isSuccess: false,
-    isError: false,
-    isFetching: false,
-    isStale: false,
-  };
+  // ##############################
+  // Public API
+  // ##############################
+
+  get state(): QueryState<TData, TError> {
+    return this.state$.value;
+  }
+
+  get state$Observable(): Observable<QueryState<TData, TError>> {
+    return this.state$.asObservable();
+  }
 
   constructor(
     options: QueryOptions<TData, TError>,
@@ -66,59 +93,44 @@ export class Query<TData = unknown, TError = Error> {
     this.sharedCacheContext = sharedCacheContext;
     this.normalizedCacheContext = normalizedCacheContext;
 
-    if (normalizedCacheContext) {
-      // When an entity referenced by this query changes, recompute state.data
-      // from the normalized shape and push it to subscribers without a refetch.
-      this.unregisterNormalizedListener =
-        normalizedCacheContext.cache.registerQueryListener(
-          normalizedCacheContext.key,
-          () => {
-            const fresh = normalizedCacheContext.cache.readQuery(
-              normalizedCacheContext.key,
-            ) as TData;
-            if (fresh !== undefined) {
-              this.updateState({ data: fresh });
-            }
-          },
-        );
-    }
+    // Initialize BehaviorSubject with initial state
+    this.state$ = new BehaviorSubject<QueryState<TData, TError>>(
+      createInitialQueryState<TData, TError>(),
+    );
   }
 
-  subscribe(subscriber: Subscriber<QueryState<TData, TError>>): () => void {
-    this.subscribers.add(subscriber);
-
+  subscribe(observer: {
+    next: (state: QueryState<TData, TError>) => void;
+    error?: (err: unknown) => void;
+    complete?: () => void;
+  }): () => void {
     // While there is at least one subscriber, the query is considered "in use",
     // so ensure any pending garbage-collection timer is cleared.
+    const isFirstSubscriber = this.subscriberCount === 0;
+    this.subscriberCount++;
     this.clearCacheTimeout();
 
+    // Subscribe first so observer gets the current state via BehaviorSubject
+    const subscription = this.state$.subscribe(observer);
+
+    // Auto-fetch on first subscriber if query is idle
+    // This guarantees only ONE fetch happens, even with concurrent subscriptions
+    if (isFirstSubscriber && this.state.status === 'idle' && this.options.enabled !== false) {
+      this.fetch().catch(() => {
+        // Error already handled by Query class
+      });
+    }
+
     return () => {
-      this.subscribers.delete(subscriber);
+      subscription.unsubscribe();
+      this.subscriberCount--;
 
       // When the last subscriber unsubscribes, (re)schedule garbage collection so
       // the query can be collected once it truly becomes unused.
-      if (this.subscribers.size === 0) {
+      if (this.subscriberCount === 0) {
         this.scheduleGarbageCollection();
       }
     };
-  }
-
-  private notify(): void {
-    this.subscribers.forEach((subscriber) => subscriber(this.state));
-  }
-
-  private updateState(partial: Partial<QueryState<TData, TError>>): void {
-    const newStatus = partial.status ?? this.state.status;
-    this.state = {
-      ...this.state,
-      ...partial,
-      status: newStatus,
-      isLoading: newStatus === 'loading',
-      isSuccess: newStatus === 'success',
-      isError: newStatus === 'error',
-      isFetching: partial.isFetching ?? this.state.isFetching,
-      isStale: partial.isStale ?? this.state.isStale,
-    };
-    this.notify();
   }
 
   async fetch(): Promise<TData> {
@@ -154,6 +166,149 @@ export class Query<TData = unknown, TError = Error> {
   }
 
   /**
+   * Called by QueryClient when an entity referenced by this query changes.
+   * Recomputes state.data from the normalized shape without refetching.
+   */
+  recomputeFromNormalizedCache(): void {
+    if (this.normalizedCacheContext && this.normalizedShape) {
+      const fresh = this.normalizedCacheContext.cache.denormalize(
+        this.normalizedShape,
+      ) as TData;
+      if (fresh !== undefined) {
+        this.updateState({ data: fresh });
+      }
+    }
+  }
+
+  destroy(): void {
+    this.clearStaleTimeout();
+    this.clearCacheTimeout();
+    this.state$.complete();
+    this.onGarbageCollection = undefined;
+  }
+
+  // ##############################
+  // State Management
+  // ##############################
+
+  private updateState(partial: Partial<QueryState<TData, TError>>): void {
+    const prevState = this.state$.value;
+    const newStatus = partial.status ?? prevState.status;
+    const nextState = {
+      ...prevState,
+      ...partial,
+      status: newStatus,
+      ...deriveStatusFlags(newStatus),
+      isFetching: partial.isFetching ?? prevState.isFetching,
+      isStale: partial.isStale ?? prevState.isStale,
+    };
+    this.state$.next(nextState);
+  }
+
+  // ##############################
+  // Fetch Lifecycle
+  // ##############################
+
+  // ####################
+  // Main Fetch Execution
+  // ####################
+
+  private async executeFetch(): Promise<TData> {
+
+    // Check if we should skip L2 (e.g., after invalidation)
+    const shouldSkipSharedCache = this.skipSharedCacheOnNextFetch;
+    this.skipSharedCacheOnNextFetch = false; // Reset flag
+
+    try {
+      // L2: Check shared cache first (only if configured and not skipped)
+      if (this.sharedCacheContext && !shouldSkipSharedCache) {
+        const cachedData = await this.getFromSharedCache();
+        if (cachedData !== CACHE_MISS) {
+          // L2 hit: populate L1 and return
+          this.completeFetchSuccess(cachedData);
+          return cachedData;
+        }
+      }
+
+      // L3: Fetch from source (queryFn)
+      const data = await this.options.queryFn();
+
+      // Populate L2 (shared cache) - fire and forget to avoid blocking
+      if (this.sharedCacheContext) {
+        this.setInSharedCache(data);
+      }
+
+      // Normalize into the entity store (if configured)
+      if (this.normalizedCacheContext) {
+        this.normalizedShape = this.normalizedCacheContext.cache.normalize(
+          data,
+          this.normalizedCacheContext.key,
+        );
+      }
+
+      // Populate L1 (in-process cache via state)
+      this.completeFetchSuccess(data);
+      return data;
+    } catch (error) {
+      const err = error as TError;
+
+      // Retry logic (only for L3 failures, not L2)
+      const maxRetries = this.options.retry ?? 3;
+      if (this.retryCount < maxRetries) {
+        this.retryCount++;
+        const delay =
+          this.options.retryDelay ??
+          Math.min(1000 * 2 ** this.retryCount, 30000);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return this.executeFetch();
+      }
+
+      this.completeFetchError(err);
+      throw err;
+    }
+  }
+
+  // ####################
+  // Fetch Completion
+  // ####################
+
+  /**
+   * Complete a successful fetch by updating state, calling callbacks, and scheduling timers.
+   * Encapsulates the common success path for both L2 cache hits and L3 source fetches.
+   */
+  private completeFetchSuccess(data: TData): void {
+    this.retryCount = 0;
+    this.updateState({
+      status: 'success',
+      data,
+      error: null,
+      isFetching: false,
+    });
+
+    this.options.onSuccess?.(data);
+    this.scheduleStale();
+    this.scheduleGarbageCollection();
+  }
+
+  /**
+   * Complete a failed fetch by updating state, calling callbacks, and scheduling cleanup.
+   */
+  private completeFetchError(err: TError): void {
+    this.updateState({
+      status: 'error',
+      error: err,
+      isFetching: false,
+    });
+
+    this.options.onError?.(err);
+    this.scheduleGarbageCollection();
+  }
+
+  // ##############################
+  // Shared Cache Operations (L2)
+  // ##############################
+
+  /**
    * Try to get data from the shared cache (L2).
    * Returns the parsed data if found, or CACHE_MISS sentinel if not found or on error.
    * Using a unique symbol ensures that legitimate null/undefined values are not
@@ -170,32 +325,15 @@ export class Query<TData = unknown, TError = Error> {
         try {
           return JSON.parse(cached) as TData;
         } catch (parseError) {
-          // Malformed or corrupted cache entry - log separately for diagnosis
-          // This could indicate data corruption, version mismatch, or tampering
-          if (
-            typeof process !== 'undefined' &&
-            process.env?.NODE_ENV !== 'production'
-          ) {
-            console.warn(
-              `[ts-query] Shared cache parse failed for key "${this.sharedCacheContext.key}": ` +
-                `cached data is malformed or corrupted`,
-              parseError,
-            );
-          }
+          this.logCacheWarning(
+            'Shared cache parse failed - cached data is malformed or corrupted',
+            parseError,
+          );
           // Fall through to L3 (source) to get fresh data
         }
       }
     } catch (adapterError) {
-      // Shared cache adapter errors (network, connection, etc.) should not break the fetch flow
-      if (
-        typeof process !== 'undefined' &&
-        process.env?.NODE_ENV !== 'production'
-      ) {
-        console.warn(
-          `[ts-query] Shared cache read failed for key "${this.sharedCacheContext.key}":`,
-          adapterError,
-        );
-      }
+      this.logCacheWarning('Shared cache read failed', adapterError);
     }
     return CACHE_MISS;
   }
@@ -215,18 +353,10 @@ export class Query<TData = unknown, TError = Error> {
     try {
       serialized = JSON.stringify(data);
     } catch (serializationError) {
-      // Data cannot be serialized (circular refs, BigInt, etc.)
-      // Skip writing to shared cache - will fall back to L3 on next fetch
-      if (
-        typeof process !== 'undefined' &&
-        process.env?.NODE_ENV !== 'production'
-      ) {
-        console.warn(
-          `[ts-query] Shared cache write skipped for key "${this.sharedCacheContext.key}": ` +
-            `data cannot be JSON-serialized`,
-          serializationError,
-        );
-      }
+      this.logCacheWarning(
+        'Shared cache write skipped - data cannot be JSON-serialized',
+        serializationError,
+      );
       return;
     }
 
@@ -237,99 +367,31 @@ export class Query<TData = unknown, TError = Error> {
         this.sharedCacheContext.ttl,
       );
     } catch (cacheError) {
-      // Shared cache errors should not break the fetch flow
-      // Log in non-production for debugging
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn(
-          `[ts-query] Shared cache write failed for key "${this.sharedCacheContext.key}":`,
-          cacheError,
-        );
-      }
+      this.logCacheWarning('Shared cache write failed', cacheError);
     }
   }
 
-  private async executeFetch(): Promise<TData> {
-    // Check if we should skip L2 (e.g., after invalidation)
-    const shouldSkipSharedCache = this.skipSharedCacheOnNextFetch;
-    this.skipSharedCacheOnNextFetch = false; // Reset flag
-
-    try {
-      // L2: Check shared cache first (only if configured and not skipped)
-      if (this.sharedCacheContext && !shouldSkipSharedCache) {
-        const cachedData = await this.getFromSharedCache();
-        if (cachedData !== CACHE_MISS) {
-          // L2 hit: populate L1 and return
-          this.retryCount = 0;
-          this.updateState({
-            status: 'success',
-            data: cachedData,
-            error: null,
-            isFetching: false,
-          });
-
-          this.options.onSuccess?.(cachedData);
-          this.scheduleStale();
-          this.scheduleGarbageCollection();
-
-          return cachedData;
-        }
-      }
-
-      // L3: Fetch from source (queryFn)
-      const data = await this.options.queryFn();
-      this.retryCount = 0;
-
-      // Populate L2 (shared cache) - fire and forget to avoid blocking
-      if (this.sharedCacheContext) {
-        this.setInSharedCache(data);
-      }
-
-      // Normalize into the entity store (if configured)
-      if (this.normalizedCacheContext) {
-        this.normalizedCacheContext.cache.writeQuery(
-          this.normalizedCacheContext.key,
-          data,
-        );
-      }
-
-      // Populate L1 (in-process cache via state)
-      this.updateState({
-        status: 'success',
-        data,
-        error: null,
-        isFetching: false,
-      });
-
-      this.options.onSuccess?.(data);
-      this.scheduleStale();
-      this.scheduleGarbageCollection();
-
-      return data;
-    } catch (error) {
-      const err = error as TError;
-
-      // Retry logic (only for L3 failures, not L2)
-      const maxRetries = this.options.retry ?? 3;
-      if (this.retryCount < maxRetries) {
-        this.retryCount++;
-        const delay =
-          this.options.retryDelay ??
-          Math.min(1000 * 2 ** this.retryCount, 30000);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        return this.executeFetch();
-      }
-
-      this.updateState({
-        status: 'error',
-        error: err,
-        isFetching: false,
-      });
-
-      this.options.onError?.(err);
-      this.scheduleGarbageCollection();
-      throw err;
+  /**
+   * Execute a cache operation with graceful error handling.
+   * Cache failures should never break the query flow - they just result in cache misses.
+   */
+  private logCacheWarning(message: string, error?: unknown): void {
+    if (
+      typeof process !== 'undefined' &&
+      process.env?.NODE_ENV !== 'production'
+    ) {
+      const key = this.sharedCacheContext?.key ?? 'unknown';
+      console.warn(`[ts-query] ${message} for key "${key}":`, error);
     }
   }
+
+  // ##############################
+  // Timer Management
+  // ##############################
+
+  // ####################
+  // Scheduling
+  // ####################
 
   private scheduleStale(): void {
     this.clearStaleTimeout();
@@ -353,33 +415,33 @@ export class Query<TData = unknown, TError = Error> {
     this.clearCacheTimeout();
     const cacheTime = this.options.cacheTime ?? 5 * 60 * 1000; // 5 minutes default
     this.cacheTimeout = setTimeout(() => {
-      if (this.subscribers.size === 0) {
+      if (this.subscriberCount === 0) {
         this.onGarbageCollection?.();
         this.destroy();
       }
     }, cacheTime);
   }
 
-  private clearStaleTimeout(): void {
-    if (this.staleTimeout) {
-      clearTimeout(this.staleTimeout);
-      this.staleTimeout = null;
+  // ####################
+  // Timer Cleanup
+  // ####################
+
+  /**
+   * Clear a timeout reference if it exists and reset to null.
+   * Encapsulates the nullable resource cleanup pattern.
+   */
+  private clearTimer(timer: ReturnType<typeof setTimeout> | null): null {
+    if (timer) {
+      clearTimeout(timer);
     }
+    return null;
+  }
+
+  private clearStaleTimeout(): void {
+    this.staleTimeout = this.clearTimer(this.staleTimeout);
   }
 
   private clearCacheTimeout(): void {
-    if (this.cacheTimeout) {
-      clearTimeout(this.cacheTimeout);
-      this.cacheTimeout = null;
-    }
-  }
-
-  destroy(): void {
-    this.clearStaleTimeout();
-    this.clearCacheTimeout();
-    this.subscribers.clear();
-    this.onGarbageCollection = undefined;
-    this.unregisterNormalizedListener?.();
-    this.unregisterNormalizedListener = undefined;
+    this.cacheTimeout = this.clearTimer(this.cacheTimeout);
   }
 }

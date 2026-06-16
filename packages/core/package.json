@@ -14,5 +14,8 @@
     "cache",
     "async"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "rxjs": "^7.8.1"
+  }
 }

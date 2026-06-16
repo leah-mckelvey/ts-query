@@ -1,5 +1,13 @@
-import { useEffect, useState } from 'react';
+// ########################################
+// IMPORTS
+// ########################################
+
+import { useState, useEffect } from 'react';
 import { useQueryClient } from './context';
+
+// ########################################
+// FRAGMENT HOOK
+// ########################################
 
 /**
  * Subscribe to a single normalized entity in the cache.
@@ -21,18 +29,18 @@ export function useFragment<
   T extends Record<string, unknown> = Record<string, unknown>,
 >(typename: string, id: string | number): T | undefined {
   const client = useQueryClient();
-
   const [data, setData] = useState<T | undefined>(() =>
     client.readFragment<T>(typename, id),
   );
 
   useEffect(() => {
-    // Sync in case the entity changed between render and effect
-    setData(client.readFragment<T>(typename, id));
-
+    // Subscribe to fragment changes
     const unsubscribe = client.subscribeFragment(typename, id, () => {
       setData(client.readFragment<T>(typename, id));
     });
+
+    // Sync initial state in case it changed between render and effect
+    setData(client.readFragment<T>(typename, id));
 
     return unsubscribe;
   }, [client, typename, id]);

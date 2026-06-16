@@ -1,17 +1,128 @@
+// #######################################
+// FOUNDATIONAL TYPES
+// #######################################
+
 export type QueryKey = string | readonly unknown[];
 
 export type QueryStatus = 'idle' | 'loading' | 'success' | 'error';
 
-export interface QueryState<TData = unknown, TError = Error> {
+// #######################################
+// OPERATION STATE SYSTEM
+// #######################################
+
+// ##############################
+// Core State Types
+// ##############################
+
+/**
+ * Core data for an asynchronous operation, without derived flags.
+ * This is the irreducible state—everything else can be computed from these fields.
+ */
+export interface OperationCore<TData = unknown, TError = Error> {
   status: QueryStatus;
   data: TData | undefined;
   error: TError | null;
+}
+
+/**
+ * Derives boolean flags from a status value.
+ * This embeds the design concept that isLoading/isSuccess/isError
+ * are pure projections of the status field.
+ */
+export interface StatusFlags {
   isLoading: boolean;
   isSuccess: boolean;
   isError: boolean;
+}
+
+/**
+ * Query-specific state extensions beyond the core operation state.
+ */
+export interface QueryExtensions {
   isFetching: boolean;
   isStale: boolean;
 }
+
+// ##############################
+// State Composition
+// ##############################
+
+/**
+ * Complete query state: core + derived flags + query-specific extensions.
+ */
+export type QueryState<TData = unknown, TError = Error> = OperationCore<
+  TData,
+  TError
+> &
+  StatusFlags &
+  QueryExtensions;
+
+/**
+ * Complete mutation state: core + derived flags (no query-specific extensions).
+ */
+export type MutationState<TData = unknown, TError = Error> = OperationCore<
+  TData,
+  TError
+> &
+  StatusFlags;
+
+// ##############################
+// State Derivation Utilities
+// ##############################
+
+/**
+ * Computes status-derived boolean flags from a QueryStatus value.
+ * Single source of truth for the status → booleans relationship.
+ */
+export function deriveStatusFlags(status: QueryStatus): StatusFlags {
+  return {
+    isLoading: status === 'loading',
+    isSuccess: status === 'success',
+    isError: status === 'error',
+  };
+}
+
+/**
+ * Creates the initial idle state for a query.
+ * Single source of truth for what "idle" means across all query instances.
+ */
+export function createInitialQueryState<
+  TData = unknown,
+  TError = Error,
+>(): QueryState<TData, TError> {
+  return {
+    status: 'idle',
+    data: undefined,
+    error: null,
+    ...deriveStatusFlags('idle'),
+    isFetching: false,
+    isStale: false,
+  };
+}
+
+/**
+ * Creates the initial idle state for a mutation.
+ * Single source of truth for what "idle" means across all mutation instances.
+ */
+export function createInitialMutationState<
+  TData = unknown,
+  TError = Error,
+>(): MutationState<TData, TError> {
+  return {
+    status: 'idle',
+    data: undefined,
+    error: null,
+    ...deriveStatusFlags('idle'),
+  };
+}
+
+// #######################################
+// CACHING SYSTEM
+// #######################################
+
+// ##############################
+// Shared Cache (L2)
+// ##############################
 
 /**
  * Adapter interface for shared cache backends (Redis, Memcached, etc.)
@@ -40,6 +151,10 @@ export interface SharedCacheConfig {
   /** Default TTL for shared cache entries in milliseconds. Defaults to 5 minutes. */
   defaultTtl?: number;
 }
+
+// ##############################
+// Normalized Cache (GraphQL)
+// ##############################
 
 /**
  * Per-type normalization policy for the normalized cache.
@@ -86,6 +201,10 @@ export interface NormalizedCacheConfig {
   typePolicies?: Record<string, TypePolicy>;
 }
 
+// #######################################
+// CLIENT CONFIGURATION
+// #######################################
+
 /**
  * Configuration options for QueryClient.
  */
@@ -96,7 +215,58 @@ export interface QueryClientConfig {
   normalizedCache?: NormalizedCacheConfig;
 }
 
-export interface QueryOptions<TData = unknown, TError = Error> {
+// #######################################
+// LIFECYCLE CALLBACKS
+// #######################################
+
+/**
+ * Lifecycle callbacks for asynchronous operations.
+ * Generic over TContext to allow different operations to pass different context.
+ */
+export interface LifecycleCallbacks<
+  TData = unknown,
+  TError = Error,
+  TContext = void,
+> {
+  /** Called when the operation succeeds. */
+  onSuccess?: (data: TData, context: TContext) => void;
+  /** Called when the operation fails. */
+  onError?: (error: TError, context: TContext) => void;
+}
+
+/**
+ * Mutation lifecycle callbacks with an additional settled hook.
+ * Settled is called regardless of success or failure.
+ */
+export interface MutationLifecycleCallbacks<
+  TData = unknown,
+  TError = Error,
+  TVariables = unknown,
+> extends LifecycleCallbacks<TData, TError, TVariables> {
+  /** Called when the operation completes, whether success or error. */
+  onSettled?: (
+    data: TData | undefined,
+    error: TError | null,
+    variables: TVariables,
+  ) => void;
+}
+
+/**
+ * Query-specific lifecycle callbacks (no context needed).
+ */
+type QueryLifecycleCallbacks<TData = unknown, TError = Error> = {
+  onSuccess?: (data: TData) => void;
+  onError?: (error: TError) => void;
+};
+
+// #######################################
+// OPERATION OPTIONS
+// #######################################
+
+export interface QueryOptions<
+  TData = unknown,
+  TError = Error,
+> extends QueryLifecycleCallbacks<TData, TError> {
   queryKey: QueryKey;
   queryFn: () => Promise<TData>;
   staleTime?: number;
@@ -108,33 +278,19 @@ export interface QueryOptions<TData = unknown, TError = Error> {
   retry?: number;
   retryDelay?: number;
   enabled?: boolean;
-  onSuccess?: (data: TData) => void;
-  onError?: (error: TError) => void;
 }
 
 export interface MutationOptions<
   TData = unknown,
   TVariables = unknown,
   TError = Error,
-> {
+> extends MutationLifecycleCallbacks<TData, TError, TVariables> {
   mutationFn: (variables: TVariables) => Promise<TData>;
-  onSuccess?: (data: TData, variables: TVariables) => void;
-  onError?: (error: TError, variables: TVariables) => void;
-  onSettled?: (
-    data: TData | undefined,
-    error: TError | null,
-    variables: TVariables,
-  ) => void;
 }
 
-export interface MutationState<TData = unknown, TError = Error> {
-  status: QueryStatus;
-  data: TData | undefined;
-  error: TError | null;
-  isLoading: boolean;
-  isSuccess: boolean;
-  isError: boolean;
-}
+// #######################################
+// OBSERVER PATTERN
+// #######################################
 
 export type Subscriber<T> = (state: T) => void;
 

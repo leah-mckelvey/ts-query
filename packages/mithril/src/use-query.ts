@@ -34,24 +34,18 @@ export function createQueryComponent<TData = unknown, TError = Error>(
       query = client.getQuery(options);
 
       // Subscribe to query updates and trigger Mithril redraw
-      const unsubscribe = query.subscribe(() => {
-        m.redraw();
+      // Query class handles auto-fetching on first subscriber
+      const unsubscribe = query.subscribe({
+        next: () => {
+          m.redraw();
+        },
+        error: (err) => {
+          console.error('Query observable error:', err);
+        },
       });
 
       // Store cleanup function in WeakMap (avoids memory leaks and type issues)
       cleanupMap.set(query, unsubscribe);
-
-      // Fetch if enabled and no data
-      const enabled = options.enabled !== false;
-      if (enabled && query.state.status === 'idle') {
-        query.fetch().catch(() => {
-          // Error already handled by Query class:
-          // - State updated (status: 'error', error set)
-          // - onError callback invoked
-          // - Subscribers notified (m.redraw() will be called)
-          // Catch here only prevents unhandled promise rejection warning
-        });
-      }
     },
 
     onremove() {

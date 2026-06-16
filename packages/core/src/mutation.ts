@@ -1,46 +1,47 @@
-import type { MutationOptions, MutationState, Subscriber } from './types';
+import { BehaviorSubject, type Observable } from 'rxjs';
+import type { MutationOptions, MutationState } from './types';
+import { deriveStatusFlags, createInitialMutationState } from './types';
 
 export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
-  private subscribers = new Set<Subscriber<MutationState<TData, TError>>>();
+  private state$: BehaviorSubject<MutationState<TData, TError>>;
   private options: MutationOptions<TData, TVariables, TError>;
 
-  state: MutationState<TData, TError> = {
-    status: 'idle',
-    data: undefined,
-    error: null,
-    isLoading: false,
-    isSuccess: false,
-    isError: false,
-  };
+  get state(): MutationState<TData, TError> {
+    return this.state$.value;
+  }
+
+  get state$Observable(): Observable<MutationState<TData, TError>> {
+    return this.state$.asObservable();
+  }
 
   constructor(options: MutationOptions<TData, TVariables, TError>) {
     this.options = options;
+
+    // Initialize BehaviorSubject with default state
+    this.state$ = new BehaviorSubject<MutationState<TData, TError>>(
+      createInitialMutationState<TData, TError>(),
+    );
   }
 
-  subscribe(subscriber: Subscriber<MutationState<TData, TError>>): () => void {
-    this.subscribers.add(subscriber);
-    return () => {
-      this.subscribers.delete(subscriber);
-    };
-  }
-
-  private notify(): void {
-    this.subscribers.forEach((subscriber) => subscriber(this.state));
+  subscribe(observer: {
+    next: (state: MutationState<TData, TError>) => void;
+    error?: (err: unknown) => void;
+    complete?: () => void;
+  }): () => void {
+    const subscription = this.state$.subscribe(observer);
+    return () => subscription.unsubscribe();
   }
 
   private updateState(partial: Partial<MutationState<TData, TError>>): void {
-    // Use newStatus to handle cases where status is not in partial
-    // This ensures boolean flags are always correct
-    const newStatus = partial.status ?? this.state.status;
-    this.state = {
-      ...this.state,
+    const prevState = this.state$.value;
+    const newStatus = partial.status ?? prevState.status;
+    const nextState = {
+      ...prevState,
       ...partial,
       status: newStatus,
-      isLoading: newStatus === 'loading',
-      isSuccess: newStatus === 'success',
-      isError: newStatus === 'error',
+      ...deriveStatusFlags(newStatus),
     };
-    this.notify();
+    this.state$.next(nextState);
   }
 
   async mutate(variables: TVariables): Promise<TData> {
@@ -73,14 +74,6 @@ export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
   }
 
   reset(): void {
-    this.state = {
-      status: 'idle',
-      data: undefined,
-      error: null,
-      isLoading: false,
-      isSuccess: false,
-      isError: false,
-    };
-    this.notify();
+    this.state$.next(createInitialMutationState<TData, TError>());
   }
 }

@@ -1,6 +1,14 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+// #######################################
+// IMPORTS
+// #######################################
+
+import { useRef, useState, useEffect } from 'react';
 import type { MutationOptions, MutationState } from '@ts-query/core';
 import { useQueryClient } from './context';
+
+// #######################################
+// TYPE DEFINITIONS
+// #######################################
 
 export interface UseMutationResult<
   TData = unknown,
@@ -12,6 +20,10 @@ export interface UseMutationResult<
   reset: () => void;
   state: MutationState<TData, TError>;
 }
+
+// #######################################
+// MUTATION HOOK
+// #######################################
 
 export function useMutation<
   TData = unknown,
@@ -27,38 +39,21 @@ export function useMutation<
   const [state, setState] = useState<MutationState<TData, TError>>(
     mutation.state,
   );
-  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    isMountedRef.current = true;
-
-    const unsubscribe = mutation.subscribe((newState) => {
-      if (isMountedRef.current) {
-        setState(newState);
-      }
+    const unsubscribe = mutation.subscribe({
+      next: (newState) => setState(newState),
+      error: (err) => console.error('Mutation observable error:', err),
     });
-
-    return () => {
-      isMountedRef.current = false;
-      unsubscribe();
-    };
+    return () => unsubscribe();
   }, [mutation]);
 
-  const mutate = useCallback(
-    async (variables: TVariables) => {
-      return mutation.mutate(variables);
-    },
-    [mutation],
-  );
-
-  const reset = useCallback(() => {
-    mutation.reset();
-  }, [mutation]);
-
+  // Mutation object is stable (from ref), so we can directly expose its methods.
+  // Both mutate and mutateAsync point to the same method for API compatibility.
   return {
-    mutate,
-    mutateAsync: mutate,
-    reset,
+    mutate: mutation.mutate.bind(mutation),
+    mutateAsync: mutation.mutate.bind(mutation),
+    reset: mutation.reset.bind(mutation),
     state,
   };
 }

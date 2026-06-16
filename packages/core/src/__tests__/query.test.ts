@@ -106,7 +106,7 @@ describe('Query', () => {
       queryFn: async () => 'data',
     });
 
-    query.subscribe(subscriber);
+    query.subscribe({ next: subscriber });
     await query.fetch();
 
     expect(subscriber).toHaveBeenCalled();
@@ -125,11 +125,24 @@ describe('Query', () => {
       queryFn: async () => 'data',
     });
 
-    const unsubscribe = query.subscribe(subscriber);
+    const unsubscribe = query.subscribe({ next: subscriber });
+
+    // BehaviorSubject emits current value immediately on subscribe ('idle')
+    // Then auto-fetch triggers, emitting 'loading'
+    await vi.waitFor(() => expect(subscriber).toHaveBeenCalledTimes(2));
+    expect(subscriber).toHaveBeenNthCalledWith(1,
+      expect.objectContaining({ status: 'idle' }),
+    );
+    expect(subscriber).toHaveBeenNthCalledWith(2,
+      expect.objectContaining({ status: 'loading' }),
+    );
+
+    subscriber.mockClear();
     unsubscribe();
 
     await query.fetch();
 
+    // After unsubscribe, should not receive any more emissions
     expect(subscriber).not.toHaveBeenCalled();
   });
 
