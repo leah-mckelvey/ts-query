@@ -17,7 +17,10 @@ class FocusManager {
 
   private setup(): void {
     // Only setup in browser environment
-    if (typeof window === 'undefined' || typeof window.addEventListener === 'undefined') {
+    if (
+      typeof window === 'undefined' ||
+      typeof window.addEventListener === 'undefined'
+    ) {
       return;
     }
 
