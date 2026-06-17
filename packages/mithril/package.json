@@ -1,6 +1,6 @@
 {
   "name": "@ts-query/mithril",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Mithril adapter for ts-query",
   "main": "dist/index.js",
   "module": "dist/index.js",
@@ -18,6 +18,6 @@
     "mithril": "^2.0.0"
   },
   "dependencies": {
-    "@ts-query/core": "^1.1.0"
+    "@ts-query/core": "^1.1.1"
   }
 }
