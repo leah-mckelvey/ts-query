@@ -205,8 +205,13 @@ function MutationPanel() {
             flex: 1,
           }}
         />
-        <button onClick={handleUpdate} disabled={mutation.state.status === 'loading'}>
-          {mutation.state.status === 'loading' ? 'Updating...' : 'Update User #1'}
+        <button
+          onClick={handleUpdate}
+          disabled={mutation.state.status === 'loading'}
+        >
+          {mutation.state.status === 'loading'
+            ? 'Updating...'
+            : 'Update User #1'}
         </button>
       </div>
       {mutation.state.status === 'error' && (
