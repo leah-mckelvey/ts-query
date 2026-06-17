@@ -6,6 +6,8 @@ import { BehaviorSubject, type Observable } from 'rxjs';
 import type { QueryOptions, QueryState, SharedCacheAdapter } from './types';
 import { deriveStatusFlags, createInitialQueryState } from './types';
 import type { NormalizedCache } from './normalized-cache';
+import { focusManager } from './focus-manager';
+import { networkManager } from './network-manager';
 
 // ########################################
 // TYPE DEFINITIONS
@@ -58,12 +60,16 @@ export class Query<TData = unknown, TError = Error> {
   private cacheTimeout: ReturnType<typeof setTimeout> | null = null;
   private retryCount = 0;
   private currentFetchPromise: Promise<TData> | null = null;
+  private currentAbortController: AbortController | null = null;
   private onGarbageCollection?: () => void;
   private sharedCacheContext?: SharedCacheContext;
   private skipSharedCacheOnNextFetch = false;
   private normalizedCacheContext?: NormalizedCacheContext;
   private normalizedShape?: unknown;
   private subscriberCount = 0;
+  private focusUnsubscribe?: () => void;
+  private networkUnsubscribe?: () => void;
+  private refetchIntervalId?: ReturnType<typeof setInterval>;
 
   // ##############################
   // Public API
@@ -89,9 +95,43 @@ export class Query<TData = unknown, TError = Error> {
     this.normalizedCacheContext = normalizedCacheContext;
 
     // Initialize BehaviorSubject with initial state
-    this.state$ = new BehaviorSubject<QueryState<TData, TError>>(
-      createInitialQueryState<TData, TError>(),
-    );
+    const initialState = createInitialQueryState<TData, TError>();
+
+    // Handle initialData: treated as fresh, won't fetch until stale
+    const initialData = this.resolveData(options.initialData);
+    if (initialData !== undefined) {
+      initialState.status = 'success';
+      initialState.data = initialData;
+      initialState.isSuccess = true;
+      initialState.isStale = false; // Fresh data
+    }
+    // Handle placeholderData: treated as stale, will fetch immediately
+    else {
+      const placeholderData = this.resolveData(options.placeholderData);
+      if (placeholderData !== undefined) {
+        initialState.data = placeholderData;
+        initialState.isStale = true; // Mark as stale to trigger fetch
+      }
+    }
+
+    this.state$ = new BehaviorSubject<QueryState<TData, TError>>(initialState);
+
+    // Schedule staleness for initialData
+    if (initialData !== undefined) {
+      this.scheduleStale();
+    }
+  }
+
+  /**
+   * Resolve data that can be either a value or a function.
+   */
+  private resolveData(
+    data: TData | (() => TData | undefined) | undefined,
+  ): TData | undefined {
+    if (data === undefined) return undefined;
+    return typeof data === 'function'
+      ? (data as () => TData | undefined)()
+      : data;
   }
 
   subscribe(
@@ -116,11 +156,18 @@ export class Query<TData = unknown, TError = Error> {
     // Subscribe first so observer gets the current state via BehaviorSubject
     const subscription = this.state$.subscribe(observer);
 
-    // Auto-fetch on first subscriber if query is idle
+    // Setup background refetch listeners and polling on first subscriber
+    if (isFirstSubscriber) {
+      this.setupBackgroundRefetch();
+      this.setupPolling();
+    }
+
+    // Auto-fetch on first subscriber if query is idle or has placeholder data
     // This guarantees only ONE fetch happens, even with concurrent subscriptions
     if (
       isFirstSubscriber &&
-      this.state.status === 'idle' &&
+      (this.state.status === 'idle' ||
+        (this.state.isStale && this.options.placeholderData !== undefined)) &&
       this.options.enabled !== false
     ) {
       this.fetch().catch(() => {
@@ -132,9 +179,12 @@ export class Query<TData = unknown, TError = Error> {
       subscription.unsubscribe();
       this.subscriberCount--;
 
-      // When the last subscriber unsubscribes, (re)schedule garbage collection so
-      // the query can be collected once it truly becomes unused.
+      // When the last subscriber unsubscribes, cleanup background refetch and
+      // (re)schedule garbage collection so the query can be collected once it
+      // truly becomes unused.
       if (this.subscriberCount === 0) {
+        this.cleanupBackgroundRefetch();
+        this.cleanupPolling();
         this.scheduleGarbageCollection();
       }
     };
@@ -147,18 +197,35 @@ export class Query<TData = unknown, TError = Error> {
       return this.currentFetchPromise;
     }
 
+    // Cancel any existing fetch before starting a new one
+    this.cancelCurrentFetch();
+
     // New fetch cycle: reset retry count and mark as loading/fetching.
     this.retryCount = 0;
     this.updateState({ status: 'loading', isFetching: true });
+
+    // Create a new AbortController for this fetch
+    this.currentAbortController = new AbortController();
 
     const promise = this.executeFetch();
     this.currentFetchPromise = promise;
 
     promise.finally(() => {
       this.currentFetchPromise = null;
+      this.currentAbortController = null;
     });
 
     return promise;
+  }
+
+  /**
+   * Cancel the current in-flight fetch if one exists.
+   */
+  private cancelCurrentFetch(): void {
+    if (this.currentAbortController) {
+      this.currentAbortController.abort();
+      this.currentAbortController = null;
+    }
   }
 
   /**
@@ -192,6 +259,21 @@ export class Query<TData = unknown, TError = Error> {
     this.clearCacheTimeout();
     this.state$.complete();
     this.onGarbageCollection = undefined;
+  }
+
+  /**
+   * Manually set the query data. Used by QueryClient.setQueryData().
+   * This is a controlled API for external cache manipulation.
+   */
+  setData(data: TData): void {
+    this.updateState({
+      status: 'success',
+      data,
+      error: null,
+      isFetching: false,
+    });
+    this.scheduleStale();
+    this.scheduleGarbageCollection();
   }
 
   // ##############################
@@ -237,7 +319,10 @@ export class Query<TData = unknown, TError = Error> {
       }
 
       // L3: Fetch from source (queryFn)
-      const data = await this.options.queryFn();
+      // Pass AbortSignal to allow queryFn to cancel on request
+      const data = await this.options.queryFn(
+        this.currentAbortController!.signal,
+      );
 
       // Populate L2 (shared cache) - fire and forget to avoid blocking
       if (this.sharedCacheContext) {
@@ -449,5 +534,91 @@ export class Query<TData = unknown, TError = Error> {
 
   private clearCacheTimeout(): void {
     this.cacheTimeout = this.clearTimer(this.cacheTimeout);
+  }
+
+  // ##############################
+  // Background Refetch
+  // ##############################
+
+  /**
+   * Setup background refetch listeners for window focus and network reconnect.
+   */
+  private setupBackgroundRefetch(): void {
+    // Default to true if not specified
+    const refetchOnWindowFocus = this.options.refetchOnWindowFocus ?? true;
+    const refetchOnReconnect = this.options.refetchOnReconnect ?? true;
+
+    if (refetchOnWindowFocus) {
+      this.focusUnsubscribe = focusManager.subscribe(() => {
+        // Only refetch if data is stale and query is not disabled
+        if (this.state.isStale && this.options.enabled !== false) {
+          this.fetch().catch(() => {
+            // Error already handled by Query class
+          });
+        }
+      });
+    }
+
+    if (refetchOnReconnect) {
+      this.networkUnsubscribe = networkManager.subscribe(() => {
+        // Only refetch if data is stale and query is not disabled
+        if (this.state.isStale && this.options.enabled !== false) {
+          this.fetch().catch(() => {
+            // Error already handled by Query class
+          });
+        }
+      });
+    }
+  }
+
+  /**
+   * Cleanup background refetch listeners.
+   */
+  private cleanupBackgroundRefetch(): void {
+    this.focusUnsubscribe?.();
+    this.networkUnsubscribe?.();
+    this.focusUnsubscribe = undefined;
+    this.networkUnsubscribe = undefined;
+  }
+
+  // ##############################
+  // Polling / Intervals
+  // ##############################
+
+  /**
+   * Setup automatic refetch interval (polling).
+   */
+  private setupPolling(): void {
+    const refetchInterval = this.options.refetchInterval;
+    const refetchIntervalInBackground =
+      this.options.refetchIntervalInBackground ?? false;
+
+    if (!refetchInterval) {
+      return;
+    }
+
+    this.refetchIntervalId = setInterval(() => {
+      // Skip polling if window is not focused and refetchIntervalInBackground is false
+      if (!refetchIntervalInBackground && !focusManager.isFocused()) {
+        return;
+      }
+
+      // Only refetch if query is not disabled
+      if (this.options.enabled !== false) {
+        this.fetch().catch(() => {
+          // Error already handled by Query class
+        });
+      }
+    }, refetchInterval);
+  }
+
+  /**
+   * Cleanup polling interval.
+   */
+  private cleanupPolling(): void {
+    if (this.refetchIntervalId) {
+      clearInterval(this.refetchIntervalId);
+      this.refetchIntervalId = undefined;
+    }
   }
 }

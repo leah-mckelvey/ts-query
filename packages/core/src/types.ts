@@ -268,7 +268,7 @@ export interface QueryOptions<
   TError = Error,
 > extends QueryLifecycleCallbacks<TData, TError> {
   queryKey: QueryKey;
-  queryFn: () => Promise<TData>;
+  queryFn: (signal: AbortSignal) => Promise<TData>;
   staleTime?: number;
   cacheTime?: number;
   /** TTL for shared cache (L2) in milliseconds. Overrides the client-level default. */
@@ -278,6 +278,45 @@ export interface QueryOptions<
   retry?: number;
   retryDelay?: number;
   enabled?: boolean;
+  /**
+   * Initial data to populate the cache before any fetch occurs.
+   * This data is treated as fresh and won't trigger a fetch until staleTime expires.
+   */
+  initialData?: TData | (() => TData | undefined);
+  /**
+   * Placeholder data to show while the query is loading.
+   * Unlike initialData, this is treated as stale and a fetch will occur immediately.
+   */
+  placeholderData?: TData | (() => TData | undefined);
+  /**
+   * Refetch when the window regains focus.
+   * @default true
+   */
+  refetchOnWindowFocus?: boolean;
+  /**
+   * Refetch when the network reconnects.
+   * @default true
+   */
+  refetchOnReconnect?: boolean;
+  /**
+   * Refetch when the component mounts.
+   * - true: always refetch
+   * - false: never refetch on mount
+   * - 'stale-only': only refetch if data is stale (default)
+   */
+  refetchOnMount?: boolean | 'stale-only';
+  /**
+   * Refetch interval in milliseconds. If set, the query will automatically
+   * refetch at this interval.
+   * @default false (no polling)
+   */
+  refetchInterval?: number | false;
+  /**
+   * Continue refetching while the window is in the background.
+   * Only applies when refetchInterval is set.
+   * @default false
+   */
+  refetchIntervalInBackground?: boolean;
 }
 
 export interface MutationOptions<
@@ -299,4 +338,52 @@ export interface Query<TData = unknown, TError = Error> {
   subscribe: (subscriber: Subscriber<QueryState<TData, TError>>) => () => void;
   fetch: () => Promise<TData>;
   invalidate: () => void;
+}
+
+// #######################################
+// QUERY FILTERS
+// #######################################
+
+/**
+ * Options for filtering queries during invalidation or removal operations.
+ */
+export interface QueryFilters {
+  /**
+   * Filter by query key. Can be:
+   * - A full query key (exact match)
+   * - A partial query key prefix (matches all keys that start with this)
+   */
+  queryKey?: QueryKey;
+  /**
+   * Whether to match the query key exactly or as a prefix.
+   * - true: only invalidate queries with this exact key
+   * - false: invalidate all queries whose keys start with queryKey (default)
+   */
+  exact?: boolean;
+  /**
+   * Custom predicate function to filter queries.
+   * Receives the serialized query key and returns true to include the query.
+   */
+  predicate?: (queryKey: string) => boolean;
+}
+
+// #######################################
+// SSR / HYDRATION
+// #######################################
+
+/**
+ * Serialized query state for SSR hydration.
+ */
+export interface DehydratedQuery {
+  queryKey: QueryKey;
+  data: unknown;
+  status: QueryStatus;
+  error: unknown | null;
+}
+
+/**
+ * Dehydrated state that can be serialized and sent to the client.
+ */
+export interface DehydratedState {
+  queries: DehydratedQuery[];
 }

@@ -40,5 +40,27 @@ export function useQuery<TData = unknown, TError = Error>(
     }
   }, [query, enabled]);
 
+  // Handle refetchOnMount
+  useEffect(() => {
+    const refetchOnMount = options.refetchOnMount ?? 'stale-only';
+
+    if (!enabled) return;
+
+    // Always refetch on mount
+    if (refetchOnMount === true) {
+      query.fetch().catch(() => {
+        // Error already handled by Query class / surfaced via state.
+      });
+    }
+    // Refetch only if stale (default behavior)
+    else if (refetchOnMount === 'stale-only' && query.state.isStale) {
+      query.fetch().catch(() => {
+        // Error already handled by Query class / surfaced via state.
+      });
+    }
+    // false: never refetch on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
+
   return state;
 }

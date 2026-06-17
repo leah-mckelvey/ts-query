@@ -11,6 +11,9 @@ import type {
   MutationOptions,
   QueryClientConfig,
   SharedCacheConfig,
+  DehydratedState,
+  DehydratedQuery,
+  QueryFilters,
 } from './types';
 
 // ########################################
@@ -52,6 +55,112 @@ export class QueryClient {
 
   private getQueryKey(key: QueryKey): string {
     return typeof key === 'string' ? key : JSON.stringify(key);
+  }
+
+  /**
+   * Parse a serialized query key back into its original form.
+   * Inverse of getQueryKey().
+   */
+  private parseQueryKey(key: string): QueryKey {
+    try {
+      // Try to parse as JSON array
+      const parsed = JSON.parse(key);
+      return Array.isArray(parsed) ? parsed : key;
+    } catch {
+      // If parsing fails, it's a string key
+      return key;
+    }
+  }
+
+  /**
+   * Normalize filters from various input formats to a standard QueryFilters object.
+   */
+  private normalizeFilters(
+    filters?: QueryKey | QueryFilters,
+  ): QueryFilters | undefined {
+    if (!filters) return undefined;
+
+    // If filters is a QueryKey (string or array), convert to QueryFilters
+    if (typeof filters === 'string' || Array.isArray(filters)) {
+      return { queryKey: filters as QueryKey, exact: false };
+    }
+
+    return filters as QueryFilters;
+  }
+
+  /**
+   * Get all query keys that match the given filters.
+   */
+  private getMatchingQueryKeys(filters?: QueryFilters): string[] {
+    // If no filters, return all keys
+    if (!filters) {
+      return Array.from(this.queries.keys());
+    }
+
+    const keys: string[] = [];
+
+    this.queries.forEach((_, key) => {
+      if (this.matchesFilters(key, filters)) {
+        keys.push(key);
+      }
+    });
+
+    return keys;
+  }
+
+  /**
+   * Check if a query key matches the given filters.
+   */
+  private matchesFilters(key: string, filters: QueryFilters): boolean {
+    // Custom predicate takes precedence
+    if (filters.predicate) {
+      return filters.predicate(key);
+    }
+
+    // If no queryKey filter, match all
+    if (!filters.queryKey) {
+      return true;
+    }
+
+    const filterKey = this.getQueryKey(filters.queryKey);
+
+    // Exact match
+    if (filters.exact === true) {
+      return key === filterKey;
+    }
+
+    // Prefix match (default)
+    // For array keys, we need to check if the filter is a prefix
+    try {
+      const parsedKey = this.parseQueryKey(key);
+      const parsedFilter = this.parseQueryKey(filterKey);
+
+      // Both are arrays - check prefix
+      if (Array.isArray(parsedKey) && Array.isArray(parsedFilter)) {
+        return this.arrayStartsWith(parsedKey, parsedFilter);
+      }
+
+      // String comparison fallback
+      return key.startsWith(filterKey);
+    } catch {
+      // Fallback to string comparison
+      return key.startsWith(filterKey);
+    }
+  }
+
+  /**
+   * Check if an array starts with another array (prefix match).
+   */
+  private arrayStartsWith(arr: unknown[], prefix: unknown[]): boolean {
+    if (prefix.length > arr.length) return false;
+
+    for (let i = 0; i < prefix.length; i++) {
+      if (JSON.stringify(arr[i]) !== JSON.stringify(prefix[i])) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   // ####################
@@ -125,19 +234,41 @@ export class QueryClient {
   }
 
   /**
-   * Invalidate queries, optionally clearing from shared cache as well.
+   * Invalidate queries based on filters, optionally clearing from shared cache as well.
+   *
+   * @example
+   * // Invalidate exact query
+   * client.invalidateQueries({ queryKey: ['users', 1], exact: true });
+   *
+   * @example
+   * // Invalidate all queries starting with ['users']
+   * client.invalidateQueries({ queryKey: ['users'] });
+   *
+   * @example
+   * // Invalidate with custom predicate
+   * client.invalidateQueries({
+   *   predicate: (key) => key.includes('user')
+   * });
+   *
+   * @example
+   * // Legacy: invalidate by key only (prefix match)
+   * client.invalidateQueries(['users']);
    */
-  invalidateQueries(queryKey?: QueryKey): void {
-    this.applyQueryOperation(
-      queryKey,
-      (query) => query.invalidate(),
-      (query) => query.invalidate(),
-      (key) => {
-        // Also invalidate in shared cache (fire-and-forget, errors are swallowed)
-        this.sharedCacheConfig?.adapter.delete(key).catch(() => {});
-      },
-    );
-    // Important: We intentionally do NOT clear the entire shared cache (L2) when queryKey is undefined because:
+  invalidateQueries(filters?: QueryKey | QueryFilters): void {
+    const normalizedFilters = this.normalizeFilters(filters);
+    const matchingKeys = this.getMatchingQueryKeys(normalizedFilters);
+
+    matchingKeys.forEach((key) => {
+      const query = this.queries.get(key);
+      if (query) {
+        query.invalidate();
+      }
+
+      // Also invalidate in shared cache (fire-and-forget, errors are swallowed)
+      this.sharedCacheConfig?.adapter.delete(key).catch(() => {});
+    });
+
+    // Important: We intentionally do NOT clear the entire shared cache (L2) when no filters are provided because:
     // 1. The shared cache may be used by multiple QueryClient instances across processes/services
     // 2. A "clear all" from a single client could unexpectedly evict data other clients rely on
     // 3. Each Query's invalidate() already skips L2 on refetch via skipSharedCacheOnNextFetch
@@ -277,6 +408,165 @@ export class QueryClient {
     options: MutationOptions<TData, TVariables, TError>,
   ): Mutation<TData, TVariables, TError> {
     return new Mutation<TData, TVariables, TError>(options);
+  }
+
+  // ##############################
+  // Manual Cache Control
+  // ##############################
+
+  /**
+   * Manually set data for a query key. This populates the cache as if the query
+   * had successfully fetched and can be used for optimistic updates or seeding
+   * the cache with known data.
+   *
+   * @example
+   * // After a mutation, update the list cache optimistically
+   * client.setQueryData(['users'], (old) => [...old, newUser]);
+   *
+   * @example
+   * // Seed cache with initial data
+   * client.setQueryData(['user', id], userData);
+   */
+  setQueryData<TData = unknown>(
+    queryKey: QueryKey,
+    updater: TData | ((old: TData | undefined) => TData),
+  ): void {
+    const key = this.getQueryKey(queryKey);
+    const query = this.queries.get(key) as Query<TData, unknown> | undefined;
+
+    if (!query) {
+      // Query doesn't exist yet - we can't set data without a Query instance
+      // This matches TanStack Query behavior - data is only set if query exists
+      return;
+    }
+
+    const currentData = query.state.data;
+    const newData =
+      typeof updater === 'function'
+        ? (updater as (old: TData | undefined) => TData)(currentData)
+        : updater;
+
+    // Use Query's public setData method
+    query.setData(newData);
+  }
+
+  /**
+   * Get the cached data for a query key without subscribing to updates.
+   *
+   * @example
+   * const user = client.getQueryData(['user', id]);
+   * if (user) {
+   *   console.log('User is cached:', user);
+   * }
+   */
+  getQueryData<TData = unknown>(queryKey: QueryKey): TData | undefined {
+    const key = this.getQueryKey(queryKey);
+    const query = this.queries.get(key) as Query<TData, unknown> | undefined;
+    return query?.state.data;
+  }
+
+  /**
+   * Prefetch a query and populate the cache. Unlike regular queries, this doesn't
+   * create a subscription, so the query will be garbage collected after cacheTime.
+   *
+   * This is especially useful for:
+   * - SSR: prefetch queries on the server before rendering
+   * - Hover prefetching: prefetch data when user hovers over a link
+   * - Route prefetching: prefetch data for the next page before navigation
+   *
+   * @example
+   * // Prefetch user data on hover
+   * <Link onMouseEnter={() => client.prefetchQuery({
+   *   queryKey: ['user', userId],
+   *   queryFn: () => fetchUser(userId)
+   * })}>
+   *
+   * @example
+   * // SSR prefetch
+   * await client.prefetchQuery({
+   *   queryKey: ['posts'],
+   *   queryFn: fetchPosts
+   * });
+   * const dehydratedState = client.dehydrate();
+   */
+  async prefetchQuery<TData = unknown, TError = Error>(
+    options: QueryOptions<TData, TError>,
+  ): Promise<void> {
+    const query = this.getQuery(options);
+
+    // Only fetch if data is stale or doesn't exist
+    if (query.state.isStale || query.state.data === undefined) {
+      await query.fetch();
+    }
+  }
+
+  // ##############################
+  // SSR / Hydration
+  // ##############################
+
+  /**
+   * Dehydrate the current query cache into a serializable state for SSR.
+   * This captures all successful queries that have data.
+   *
+   * @example
+   * // On the server (Next.js)
+   * export async function getServerSideProps() {
+   *   const queryClient = new QueryClient();
+   *   await queryClient.prefetchQuery({
+   *     queryKey: ['posts'],
+   *     queryFn: fetchPosts
+   *   });
+   *   return {
+   *     props: {
+   *       dehydratedState: queryClient.dehydrate()
+   *     }
+   *   };
+   * }
+   */
+  dehydrate(): DehydratedState {
+    const queries: DehydratedQuery[] = [];
+
+    this.queries.forEach((query, key) => {
+      // Only dehydrate successful queries with data
+      if (query.state.status === 'success' && query.state.data !== undefined) {
+        queries.push({
+          queryKey: this.parseQueryKey(key),
+          data: query.state.data,
+          status: query.state.status,
+          error: query.state.error,
+        });
+      }
+    });
+
+    return { queries };
+  }
+
+  /**
+   * Hydrate the query cache from a dehydrated state (typically from SSR).
+   * This populates the cache with pre-fetched data from the server.
+   *
+   * @example
+   * // On the client (Next.js)
+   * function App({ dehydratedState }) {
+   *   const [queryClient] = useState(() => {
+   *     const client = new QueryClient();
+   *     client.hydrate(dehydratedState);
+   *     return client;
+   *   });
+   *   // ...
+   * }
+   */
+  hydrate(dehydratedState: DehydratedState): void {
+    dehydratedState.queries.forEach((dehydratedQuery) => {
+      const query = this.getQuery({
+        queryKey: dehydratedQuery.queryKey,
+        // Hydrated queries don't need a queryFn since they already have data
+        queryFn: () => Promise.resolve(dehydratedQuery.data),
+      });
+
+      // Set the hydrated data without fetching
+      query.setData(dehydratedQuery.data);
+    });
   }
 
   // ##############################
