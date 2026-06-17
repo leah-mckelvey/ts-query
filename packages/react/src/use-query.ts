@@ -1,6 +1,7 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import type { QueryOptions, QueryState } from '@ts-query/core';
 import { useQueryClient } from './context';
+import { createSubscriptionConfig, useSubscription } from './use-subscription';
 
 // ########################################
 // PUBLIC HOOK
@@ -19,31 +20,25 @@ export function useQuery<TData = unknown, TError = Error>(
 ): QueryState<TData, TError> {
   const client = useQueryClient();
   const query = client.getQuery(options);
+  const enabled = options.enabled !== false;
 
-  const [state, setState] = useState<QueryState<TData, TError>>(query.state);
-  const isMountedRef = useRef(true);
+  // Shared subscription/mounted-guard logic (also used by useMutation/useFragment).
+  const state = useSubscription(
+    useMemo(() => createSubscriptionConfig(query), [query]),
+  );
 
+  // The Query instance is shared by queryKey and keeps the options it was first
+  // created with, so its own first-subscriber auto-fetch can't see a later
+  // `enabled` flip. When `enabled` transitions false -> true (or the query is
+  // otherwise still idle), trigger the fetch explicitly. Query.fetch()
+  // deduplicates in-flight requests, so this never causes a double fetch.
   useEffect(() => {
-    isMountedRef.current = true;
-
-    // Subscribe to query observable
-    // The Query class handles auto-fetching on first subscriber
-    const unsubscribe = query.subscribe({
-      next: (newState) => {
-        if (isMountedRef.current) {
-          setState(newState);
-        }
-      },
-      error: (err) => {
-        console.error('Query observable error:', err);
-      },
-    });
-
-    return () => {
-      isMountedRef.current = false;
-      unsubscribe();
-    };
-  }, [query, options.enabled]);
+    if (enabled && query.state.status === 'idle') {
+      query.fetch().catch(() => {
+        // Error already handled by Query class / surfaced via state.
+      });
+    }
+  }, [query, enabled]);
 
   return state;
 }

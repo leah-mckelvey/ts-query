@@ -11,11 +11,13 @@ Imagine you have three different light switches in your house, and each one has 
 
 **Why duplication was risky:** If someone improved the safety mechanism on one switch (say, added a better fire detector), the other two switches would still have the old version. In our case, two of the hooks (`useQuery` and `useMutation`) had the safety check, but the third one (`useFragment`) was missing it entirely. This meant `useFragment` could try to update a component that no longer existed, potentially causing crashes.
 
-**What we did:** We introduced a new `useSubscription` helper in `packages/react/src/use-subscription.ts` that encapsulates the subscription/unsubscription pattern. Each hook (`useQuery`, `useMutation`, and `useFragment`) still manages its own subscription logic directly—but the `useSubscription` utility and its `createSubscriptionConfig` helper are available for future consolidation. We also fixed the missing safety check in `useFragment` to prevent stale-update crashes.
+**What we did:** We introduced a new `useSubscription` helper in `packages/react/src/use-subscription.ts` that encapsulates the subscription/unsubscription pattern, and we routed **all three** hooks (`useQuery`, `useMutation`, and `useFragment`) through it. There is now exactly one copy of the "watch for changes and don't update an unmounted component" logic, and every hook—including `useFragment`, which previously had no such guard—inherits it. The light switches now share a single safety mechanism.
+
+While wiring this up we also fixed a separate correctness bug in `useQuery`: because a query instance is shared by `queryKey` and remembers the options it was first created with, toggling `enabled` from `false` to `true` never triggered a fetch. `useQuery` now explicitly kicks off the fetch when `enabled` becomes true and the query is still idle (and `Query.fetch()` deduplicates, so this can't cause a double request).
 
 ## Impact
 
-- **Before:** `useFragment` was missing the mounted-guard that prevents updating unmounted components
-- **After:** All three hooks guard against stale updates
-- **New utility:** `useSubscription` and `createSubscriptionConfig` provide a reusable pattern for future refactors
-- **Reliability:** Fixed a potential crash bug in `useFragment` that could happen if a user navigated away quickly
+- **Before:** `useFragment` was missing the mounted-guard, and the same subscription boilerplate was copy-pasted across all three hooks
+- **After:** All three hooks share a single `useSubscription` implementation, so the mounted-guard exists in exactly one place
+- **Bug fix:** `useQuery` now fetches when `enabled` flips `false` → `true` (previously stuck in `idle`)
+- **Reliability:** Eliminated the duplicated stale-update guard and the `useFragment` crash path it left open

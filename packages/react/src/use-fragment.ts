@@ -2,8 +2,9 @@
 // IMPORTS
 // ########################################
 
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { useQueryClient } from './context';
+import { useSubscription } from './use-subscription';
 
 // ########################################
 // FRAGMENT HOOK
@@ -29,21 +30,20 @@ export function useFragment<
   T extends Record<string, unknown> = Record<string, unknown>,
 >(typename: string, id: string | number): T | undefined {
   const client = useQueryClient();
-  const [data, setData] = useState<T | undefined>(() =>
-    client.readFragment<T>(typename, id),
+
+  // Adapt the entity-based fragment API to the shared subscription helper:
+  // read the current entity synchronously, and re-read it on every change
+  // notification. This shares the mounted-guard logic with useQuery/useMutation.
+  const config = useMemo(
+    () => ({
+      getCurrentState: () => client.readFragment<T>(typename, id),
+      subscribe: (callback: (data: T | undefined) => void) =>
+        client.subscribeFragment(typename, id, () => {
+          callback(client.readFragment<T>(typename, id));
+        }),
+    }),
+    [client, typename, id],
   );
 
-  useEffect(() => {
-    // Subscribe to fragment changes
-    const unsubscribe = client.subscribeFragment(typename, id, () => {
-      setData(client.readFragment<T>(typename, id));
-    });
-
-    // Sync initial state in case it changed between render and effect
-    setData(client.readFragment<T>(typename, id));
-
-    return unsubscribe;
-  }, [client, typename, id]);
-
-  return data;
+  return useSubscription(config);
 }

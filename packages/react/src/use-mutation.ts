@@ -2,9 +2,10 @@
 // IMPORTS
 // #######################################
 
-import { useRef, useState, useEffect } from 'react';
+import { useMemo, useRef } from 'react';
 import type { MutationOptions, MutationState } from '@ts-query/core';
 import { useQueryClient } from './context';
+import { createSubscriptionConfig, useSubscription } from './use-subscription';
 
 // #######################################
 // TYPE DEFINITIONS
@@ -36,17 +37,10 @@ export function useMutation<
   const mutationRef = useRef(client.createMutation(options));
   const mutation = mutationRef.current;
 
-  const [state, setState] = useState<MutationState<TData, TError>>(
-    mutation.state,
+  // Shared subscription/mounted-guard logic (also used by useQuery/useFragment).
+  const state = useSubscription(
+    useMemo(() => createSubscriptionConfig(mutation), [mutation]),
   );
-
-  useEffect(() => {
-    const unsubscribe = mutation.subscribe({
-      next: (newState) => setState(newState),
-      error: (err) => console.error('Mutation observable error:', err),
-    });
-    return () => unsubscribe();
-  }, [mutation]);
 
   // Mutation object is stable (from ref), so we can directly expose its methods.
   // Both mutate and mutateAsync point to the same method for API compatibility.
