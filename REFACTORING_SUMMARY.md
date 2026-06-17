@@ -11,11 +11,11 @@ Imagine you have three different light switches in your house, and each one has 
 
 **Why duplication was risky:** If someone improved the safety mechanism on one switch (say, added a better fire detector), the other two switches would still have the old version. In our case, two of the hooks (`useQuery` and `useMutation`) had the safety check, but the third one (`useFragment`) was missing it entirely. This meant `useFragment` could try to update a component that no longer existed, potentially causing crashes.
 
-**What we did:** We wrote the safety mechanism once in a new file called `useSubscription`, and then made all three switches use that same set of instructions. Now if we improve the safety mechanism, all three switches get the improvement automatically. And we fixed the missing safety check in `useFragment` in the process.
+**What we did:** We introduced a new `useSubscription` helper in `packages/react/src/use-subscription.ts` that encapsulates the subscription/unsubscription pattern. Each hook (`useQuery`, `useMutation`, and `useFragment`) still manages its own subscription logic directly—but the `useSubscription` utility and its `createSubscriptionConfig` helper are available for future consolidation. We also fixed the missing safety check in `useFragment` to prevent stale-update crashes.
 
 ## Impact
 
-- **Before:** 127 total lines across three files, with the same ~15 lines of safety code repeated three times (with one incomplete)
-- **After:** 114 total lines, with the safety code written once and reused three times
+- **Before:** `useFragment` was missing the mounted-guard that prevents updating unmounted components
+- **After:** All three hooks guard against stale updates
+- **New utility:** `useSubscription` and `createSubscriptionConfig` provide a reusable pattern for future refactors
 - **Reliability:** Fixed a potential crash bug in `useFragment` that could happen if a user navigated away quickly
-- **Maintenance:** Future improvements to how we handle data updates only need to be made in one place instead of three

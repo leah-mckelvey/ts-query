@@ -260,24 +260,26 @@ function MutationDuringFetchQuery({
 
   useEffect(() => {
     if (triggerMutation > 0) {
-      mutation.mutate();
+      mutation.mutate().catch(() => {
+        // Error is reflected in mutation.state
+      });
     }
-  }, [triggerMutation]);
+  }, [triggerMutation, mutation]);
 
   return (
     <div className={`card ${status}`} style={{ marginTop: '10px' }}>
       <h4>Query State</h4>
       <div className={`status-badge ${status}`}>{status}</div>
-      {mutation.status === 'pending' && (
+      {mutation.state.status === 'loading' && (
         <div className="status-badge loading">mutation pending</div>
       )}
-      {mutation.status === 'success' && (
+      {mutation.state.status === 'success' && (
         <div className="status-badge success">mutation success</div>
       )}
       <div className="data-display">
         {data ? JSON.stringify(data, null, 2) : 'Loading...'}
       </div>
-      {mutation.status === 'success' && data?.name === 'MUTATED NAME' && (
+      {mutation.state.status === 'success' && data?.name === 'MUTATED NAME' && (
         <div
           style={{ marginTop: '10px', color: '#28a745', fontWeight: 'bold' }}
         >

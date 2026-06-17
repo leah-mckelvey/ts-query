@@ -23,11 +23,19 @@ export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
     );
   }
 
-  subscribe(observer: {
-    next: (state: MutationState<TData, TError>) => void;
-    error?: (err: unknown) => void;
-    complete?: () => void;
-  }): () => void {
+  subscribe(
+    observerOrCallback:
+      | {
+          next: (state: MutationState<TData, TError>) => void;
+          error?: (err: unknown) => void;
+          complete?: () => void;
+        }
+      | ((state: MutationState<TData, TError>) => void),
+  ): () => void {
+    const observer =
+      typeof observerOrCallback === 'function'
+        ? { next: observerOrCallback }
+        : observerOrCallback;
     const subscription = this.state$.subscribe(observer);
     return () => subscription.unsubscribe();
   }

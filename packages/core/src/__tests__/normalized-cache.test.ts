@@ -88,7 +88,7 @@ class UpdateCollector<T> {
   private updates: T[] = [];
 
   subscribe(query: ReturnType<QueryClient['getQuery']>) {
-    query.subscribe((state) => this.updates.push(state.data as T));
+    query.subscribe({ next: (state) => this.updates.push(state.data as T) });
   }
 
   get latest(): T {
