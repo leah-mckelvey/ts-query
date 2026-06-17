@@ -121,6 +121,49 @@ describe('useQuery', () => {
     expect(queryFn).not.toHaveBeenCalled();
   });
 
+  it('should fetch when enabled flips from false to true', async () => {
+    const queryClient = new QueryClient();
+    const queryFn = vi.fn(async () => 'late data');
+
+    function ToggleComponent({ enabled }: { enabled: boolean }) {
+      const { data, isLoading } = useQuery({
+        queryKey: 'toggle',
+        queryFn,
+        enabled,
+      });
+
+      if (isLoading) return <div>Loading...</div>;
+      return <div>Data: {data || 'none'}</div>;
+    }
+
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <ToggleComponent enabled={false} />
+      </QueryClientProvider>,
+    );
+
+    // Disabled: nothing fetched yet.
+    await waitFor(() => {
+      expect(screen.getByText('Data: none')).toBeInTheDocument();
+    });
+    expect(queryFn).not.toHaveBeenCalled();
+
+    // Flip enabled true on the same (cached) query instance.
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <ToggleComponent enabled={true} />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(
+      () => {
+        expect(screen.getByText('Data: late data')).toBeInTheDocument();
+      },
+      { timeout: 2000 },
+    );
+    expect(queryFn).toHaveBeenCalledTimes(1);
+  });
+
   it('should throw error when used outside provider', () => {
     const queryFn = vi.fn().mockResolvedValue('test data');
 
