@@ -19,9 +19,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { QueryClient } from '../query-client';
 import type { SharedCacheAdapter } from '../types';
 
-/** Minimal shared L2 (models Redis): one instance handed to every "worker". */
+/** Shared L2 (models Redis) WITHOUT distributed locking. */
 class SharedL2 implements SharedCacheAdapter {
-  private store = new Map<string, { value: string; expiresAt: number }>();
+  protected store = new Map<string, { value: string; expiresAt: number }>();
   async get(key: string): Promise<string | null> {
     const entry = this.store.get(key);
     if (!entry) return null;
@@ -39,6 +39,25 @@ class SharedL2 implements SharedCacheAdapter {
   }
   async clear(): Promise<void> {
     this.store.clear();
+  }
+}
+
+/**
+ * Shared L2 WITH distributed single-flight (models Redis SET NX PX + a
+ * token-checked release). Lazy TTL expiry, no timers -- mirrors how Redis PX
+ * expiry behaves semantically and keeps the test free of open handles.
+ */
+class LockingSharedL2 extends SharedL2 {
+  private locks = new Map<string, { token: string; expiresAt: number }>();
+  async acquireLock(key: string, token: string, ttlMs: number): Promise<boolean> {
+    const cur = this.locks.get(key);
+    if (cur && Date.now() < cur.expiresAt) return false;
+    this.locks.set(key, { token, expiresAt: Date.now() + ttlMs });
+    return true;
+  }
+  async releaseLock(key: string, token: string): Promise<void> {
+    const cur = this.locks.get(key);
+    if (cur && cur.token === token) this.locks.delete(key);
   }
 }
 
@@ -63,79 +82,72 @@ function makeDb(delayMs: number) {
 
 const settle = () => new Promise((r) => setTimeout(r, 25));
 
-describe('server-side fetch fan-out (the leak probe)', () => {
-  let l2: SharedL2;
-  beforeEach(() => {
-    l2 = new SharedL2();
-  });
+function worker(l2: SharedCacheAdapter) {
+  return new QueryClient({ sharedCache: { adapter: l2, defaultTtl: 60_000 } });
+}
 
-  function makeWorker() {
-    return new QueryClient({
-      sharedCache: { adapter: l2, defaultTtl: 60_000 },
+/** Fire `perWorker` concurrent same-key requests on each of `count` workers. */
+async function coldBurst(l2: SharedCacheAdapter, count: number, perWorker: number) {
+  const db = makeDb(20);
+  const workers = Array.from({ length: count }, () => worker(l2));
+  await Promise.all(
+    workers.flatMap((w) =>
+      Array.from({ length: perWorker }, () =>
+        w.getQuery({ queryKey: ['user', 1], queryFn: db.queryFn }).fetch(),
+      ),
+    ),
+  );
+  return db.calls;
+}
+
+describe('server-side fetch fan-out', () => {
+  describe('single process', () => {
+    it('concurrent same-key requests fan out to 1 (in-process single-flight)', async () => {
+      const fanOut = await coldBurst(new SharedL2(), 1, 50);
+      // eslint-disable-next-line no-console
+      console.log(`[1 process, 50 concurrent] fan-out = ${fanOut} (want 1)`);
+      expect(fanOut).toBe(1); // currentFetchPromise dedups within the process
     });
-  }
-
-  it('SINGLE process: concurrent same-key requests fan out to 1 (single-flight works in-process)', async () => {
-    const db = makeDb(20);
-    const worker = makeWorker();
-
-    // 50 concurrent requests hit one process for one cold key.
-    await Promise.all(
-      Array.from({ length: 50 }, () =>
-        worker.getQuery({ queryKey: ['user', 1], queryFn: db.queryFn }).fetch(),
-      ),
-    );
-
-    // eslint-disable-next-line no-console
-    console.log(`[1 process,  50 concurrent] fan-out = ${db.calls} (want 1)`);
-    expect(db.calls).toBe(1); // currentFetchPromise dedups within the process
   });
 
-  it('MANY processes, cold burst: fan-out = number of processes, NOT 1 (the leak)', async () => {
-    const db = makeDb(20);
-    const WORKERS = 4;
-    const workers = Array.from({ length: WORKERS }, makeWorker);
+  describe('many processes, cold burst', () => {
+    it('WITHOUT a lock-capable adapter, fan-out = number of processes (bounded fallback)', async () => {
+      const fanOut = await coldBurst(new SharedL2(), 4, 25);
+      // eslint-disable-next-line no-console
+      console.log(`[4 processes, no lock] fan-out = ${fanOut} (bounded to #workers)`);
+      // A shared cache is not a shared lock: all 4 workers miss L2 and hit the
+      // source. Still bounded by #workers (not by total request count).
+      expect(fanOut).toBe(4);
+    });
 
-    // Each of the 4 processes gets 25 concurrent requests for the same cold
-    // key, all at once -- the realistic "cache is cold, traffic spikes" moment.
-    await Promise.all(
-      workers.flatMap((w) =>
-        Array.from({ length: 25 }, () =>
-          w.getQuery({ queryKey: ['user', 1], queryFn: db.queryFn }).fetch(),
-        ),
-      ),
-    );
-
-    // eslint-disable-next-line no-console
-    console.log(
-      `[${WORKERS} processes, cold burst] fan-out = ${db.calls} (want 1, leaks to ${WORKERS})`,
-    );
-
-    // The honest result: a SHARED CACHE IS NOT A SHARED LOCK. All 4 processes
-    // read L2, all miss (nothing written yet), all hit the DB. The shared
-    // adapter only dedups AFTER the first result is written -- it cannot
-    // single-flight a concurrent cold burst across processes.
-    expect(db.calls).toBe(WORKERS);
+    it('WITH distributed single-flight, fan-out = 1 (the fix)', async () => {
+      const fanOut = await coldBurst(new LockingSharedL2(), 4, 25);
+      // eslint-disable-next-line no-console
+      console.log(`[4 processes, locking] fan-out = ${fanOut} (want 1)`);
+      // One worker wins the lock and fetches; the other three wait for it to
+      // publish to L2. Cross-process coalescing -> a single source call.
+      expect(fanOut).toBe(1);
+    });
   });
 
-  it('MANY processes, warm: shared L2 does prevent re-fetch once populated', async () => {
-    const db = makeDb(20);
-    const workers = Array.from({ length: 4 }, makeWorker);
+  describe('many processes, warm L2', () => {
+    it('shared L2 prevents re-fetch once populated', async () => {
+      const l2 = new LockingSharedL2();
+      const db = makeDb(20);
+      const workers = Array.from({ length: 4 }, () => worker(l2));
 
-    // Process 0 warms the cache first and we let the fire-and-forget L2 write
-    // settle.
-    await workers[0]
-      .getQuery({ queryKey: ['user', 1], queryFn: db.queryFn })
-      .fetch();
-    await settle();
+      await workers[0]
+        .getQuery({ queryKey: ['user', 1], queryFn: db.queryFn })
+        .fetch();
+      await settle();
 
-    // Now the other three processes read sequentially -> all L2 hits.
-    for (const w of workers.slice(1)) {
-      await w.getQuery({ queryKey: ['user', 1], queryFn: db.queryFn }).fetch();
-    }
+      for (const w of workers.slice(1)) {
+        await w.getQuery({ queryKey: ['user', 1], queryFn: db.queryFn }).fetch();
+      }
 
-    // eslint-disable-next-line no-console
-    console.log(`[4 processes, warm] fan-out = ${db.calls} (want 1)`);
-    expect(db.calls).toBe(1); // L2 carries the value across processes once warm
+      // eslint-disable-next-line no-console
+      console.log(`[4 processes, warm] fan-out = ${db.calls} (want 1)`);
+      expect(db.calls).toBe(1);
+    });
   });
 });

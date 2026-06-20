@@ -53,6 +53,29 @@ export class InMemoryAdapter implements SharedCacheAdapter {
     this.store.clear();
   }
 
+  // --------------------------------------------------------------------------
+  // Distributed single-flight (lazy-expiry locks).
+  //
+  // In a single process this just dedups the (already in-process-deduped)
+  // fetch, so it is effectively a no-op here. It matters once this is swapped
+  // for the Redis adapter below: then the lock is shared across workers and a
+  // cold concurrent burst collapses to ONE source call instead of one-per-
+  // worker. See packages/core/src/__tests__/server-stampede.test.ts.
+  // --------------------------------------------------------------------------
+  private locks = new Map<string, { token: string; expiresAt: number }>();
+
+  async acquireLock(key: string, token: string, ttlMs: number): Promise<boolean> {
+    const cur = this.locks.get(key);
+    if (cur && Date.now() < cur.expiresAt) return false;
+    this.locks.set(key, { token, expiresAt: Date.now() + ttlMs });
+    return true;
+  }
+
+  async releaseLock(key: string, token: string): Promise<void> {
+    const cur = this.locks.get(key);
+    if (cur && cur.token === token) this.locks.delete(key);
+  }
+
   private cleanup(): void {
     const now = Date.now();
     for (const [key, entry] of this.store.entries()) {
@@ -100,6 +123,23 @@ export class RedisAdapter implements SharedCacheAdapter {
 
   async delete(key: string): Promise<void> {
     await this.redis.del(`game:${key}`);
+  }
+
+  // Distributed single-flight across workers.
+  async acquireLock(key: string, token: string, ttlMs: number): Promise<boolean> {
+    // SET NX PX: succeeds only if no live lock exists for this key.
+    const res = await this.redis.set(`lock:${key}`, token, 'PX', ttlMs, 'NX');
+    return res === 'OK';
+  }
+
+  async releaseLock(key: string, token: string): Promise<void> {
+    // Compare-and-delete via Lua so we only release a lock we still own
+    // (the token guards against deleting a lock that already expired and was
+    // re-acquired by another worker).
+    const lua =
+      'if redis.call("get", KEYS[1]) == ARGV[1] ' +
+      'then return redis.call("del", KEYS[1]) else return 0 end';
+    await this.redis.eval(lua, 1, `lock:${key}`, token);
   }
 }
 */

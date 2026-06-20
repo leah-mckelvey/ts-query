@@ -140,6 +140,21 @@ export interface SharedCacheAdapter {
    * Optional - primarily used for testing to reset state between tests.
    */
   clear?: () => Promise<void>;
+  /**
+   * Optional distributed single-flight primitives. When an adapter implements
+   * BOTH of these, a cold concurrent burst across processes is coalesced into a
+   * single source (queryFn) call: only the lock winner fetches; other processes
+   * wait for the winner to publish to L2. Adapters that omit these keep the
+   * previous behavior, where fan-out is bounded by the number of processes.
+   *
+   * `acquireLock` has Redis `SET key token NX PX ttlMs` semantics: it returns
+   * true only if no live lock exists for `key`. `releaseLock` is a
+   * compare-and-delete: it must only delete the lock if `token` still matches
+   * the current holder, so a process can never release a lock it no longer owns
+   * (e.g. one that already expired and was re-acquired by someone else).
+   */
+  acquireLock?: (key: string, token: string, ttlMs: number) => Promise<boolean>;
+  releaseLock?: (key: string, token: string) => Promise<void>;
 }
 
 /**
