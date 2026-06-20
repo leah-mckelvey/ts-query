@@ -263,8 +263,9 @@ retries, invalidation, subscriptions, state management — in pure TypeScript
 with zero deps. Adding a new framework means writing a thin adapter, not
 forking a library. The same pattern extends to the server: plug in a
 `SharedCacheAdapter` and the `QueryClient` becomes a tiered cache for any
-backend. Your frontend stack literally doesn't matter. I will have it
-running with production-grade infrastructure inside a day.
+backend. Your frontend stack literally doesn't matter. Because the hard parts
+live behind the adapter pattern, I can stand the whole system up
+end-to-end — frontend and server — in short order.
 
 ## Roadmap
 
