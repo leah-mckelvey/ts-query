@@ -213,13 +213,7 @@ export class QueryClient {
 
     // Notify all affected queries to recompute their data from the normalized cache
     this.notifyAffectedQueries(affectedKeys, (query) => {
-      if ('recomputeFromNormalizedCache' in query) {
-        (
-          query as Query<unknown, unknown> & {
-            recomputeFromNormalizedCache(): void;
-          }
-        ).recomputeFromNormalizedCache();
-      }
+      query.recomputeFromNormalizedCache();
     });
   }
 

@@ -1,4 +1,4 @@
-# Observable Architecture: Why RxJS is Critical
+# Observable Architecture: Request Deduplication
 
 ## The Problem We Fixed
 
@@ -112,21 +112,13 @@ app.get('/api/users/:id', async (req, res) => {
 
 This is the stampeding herd problem - observables solve it at the architectural level.
 
-## Bundle Size Trade-off
+## Trade-off
 
-- **RxJS cost**: ~10KB gzipped (rxjs@7.8.1)
-- **What you get**:
-  - Bulletproof request deduplication
-  - Battle-tested observable semantics
-  - Hot/cold observable patterns
-  - Full operator ecosystem (if needed later)
-  - Proper backpressure handling
-
-The alternative is reimplementing these patterns yourself, which:
-
-1. Adds complexity
-2. May have subtle bugs (like the race condition we just fixed)
-3. Still costs bundle size (just in your own code)
+Full RxJS is ~10KB gzipped (rxjs@7.8.1), and right now I'm using a small
+slice of it — a `BehaviorSubject` plus subscriber tracking. That cost is
+accepted deliberately: the operator ecosystem (`switchMap`, `debounceTime`)
+is on the roadmap for typeahead and polling, and RxJS is battle-tested in
+both Node and the browser.
 
 ## Migration Notes
 
@@ -204,25 +196,6 @@ cd playground/normalized-cache-test && npm run dev
 **Before RxJS**: Test showed 2-3 requests (race condition)
 **After RxJS**: Test shows 1 request (correct)
 
-## Architectural Decision: Why Not a Lighter Alternative?
-
-You might ask: "Do we need full RxJS? Could we use a simpler BehaviorSubject implementation?"
-
-**Answer**: RxJS is the right choice because:
-
-1. **Battle-tested**: Millions of production apps use it
-2. **Future-proof**: Already has operators if you need advanced patterns later (e.g., `debounceTime`, `switchMap` for typeahead queries)
-3. **Standard**: Developers know RxJS, reduces onboarding friction
-4. **Server-side**: Works in Node.js for backend caching (no DOM dependencies)
-5. **Only 10KB**: Smaller than many state management libraries
-
-The alternative (custom observable implementation) would:
-
-- Still cost bundle size (~5-7KB for a good implementation)
-- Risk subtle bugs (like the one we just fixed)
-- Require ongoing maintenance
-- Lack advanced operators if needed
-
 ## Conclusion
 
 **Observables aren't optional for this architecture - they're fundamental.**
@@ -234,8 +207,6 @@ The "ask once, answer many" guarantee requires:
 - Proper subscriber management
 
 Callbacks alone can't provide this without introducing race conditions.
-
-Your original instinct to build this with observables was correct. The temporary detour into callback-based state was an architectural regression that broke request deduplication.
 
 ---
 
