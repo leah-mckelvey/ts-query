@@ -1,12 +1,13 @@
 /**
- * Cluster harness for multi-process stampede testing.
+ * Process harness for multi-process stampede testing.
  *
- * Orchestrates N worker processes, each running its own QueryClient,
- * all sharing one Redis instance (L2).
+ * Orchestrates N worker processes via child_process.fork(), each running
+ * its own QueryClient, all sharing one Redis instance (L2).
  */
 
-import cluster from 'node:cluster';
+import { fork, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import Redis from 'ioredis';
 import { RedisMemoryServer } from 'redis-memory-server';
 import type { AggregatedMetrics } from './metrics-collector';
@@ -42,7 +43,7 @@ export interface TestResult {
 export class ClusterHarness {
   private redisServer?: RedisMemoryServer;
   private redis?: Redis;
-  private workers: cluster.Worker[] = [];
+  private workers: ChildProcess[] = [];
 
   async start(): Promise<{ host: string; port: number }> {
     // Start Redis memory server
@@ -78,15 +79,24 @@ export class ClusterHarness {
     const workerMetrics: Promise<unknown>[] = [];
     const startTime = Date.now();
 
-    // Use tsx to execute TypeScript worker directly
-    const workerPath = fileURLToPath(new URL('./worker-entry.ts', import.meta.url));
-    cluster.setupPrimary({
-      exec: workerPath,
-      execArgv: ['--import', 'tsx'],
-    });
+    // Resolve worker path - handle both file:// URLs and regular paths
+    let workerPath: string;
+    try {
+      // Try ESM import.meta.url approach
+      const currentDir = dirname(fileURLToPath(import.meta.url));
+      workerPath = join(currentDir, 'worker-entry.ts');
+    } catch {
+      // Fallback for environments where import.meta.url isn't a file URL
+      // This shouldn't happen, but provides safety
+      workerPath = join(__dirname, 'worker-entry.ts');
+    }
 
     for (let i = 0; i < scenario.workerCount; i++) {
-      const worker = cluster.fork();
+      // Fork worker process with tsx for TypeScript execution
+      const worker = fork(workerPath, [], {
+        execArgv: ['--import', 'tsx'],
+        stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+      });
       this.workers.push(worker);
 
       // Send config to worker
