@@ -360,8 +360,8 @@ describe('QueryClient with SharedCache (L2)', () => {
     expect(staleWindow).toBeCloseTo(30000 * 0.8, -2); // ~24000ms
 
     // Verify TTL has jitter applied (±10% of 30000ms)
-    expect(ttl).toBeGreaterThan(30000 * 0.9);
-    expect(ttl).toBeLessThan(30000 * 1.1);
+    expect(ttl).toBeGreaterThanOrEqual(30000 * 0.9);
+    expect(ttl).toBeLessThanOrEqual(30000 * 1.1);
 
     expect(store.has('test-key')).toBe(true);
   });
@@ -393,8 +393,8 @@ describe('QueryClient with SharedCache (L2)', () => {
     expect(metadata.data).toBe('data');
 
     // Verify jittered TTL is based on 5000ms, not 30000ms
-    expect(ttl).toBeGreaterThan(5000 * 0.9);
-    expect(ttl).toBeLessThan(5000 * 1.1);
+    expect(ttl).toBeGreaterThanOrEqual(5000 * 0.9);
+    expect(ttl).toBeLessThanOrEqual(5000 * 1.1);
   });
 
   it('should skip shared cache when skipSharedCache is true', async () => {

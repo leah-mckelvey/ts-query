@@ -72,11 +72,17 @@ export class QueryClient {
         this.sharedCacheConfig?.defaultTtl ??
         DEFAULT_SHARED_CACHE_TTL;
 
-      // Determine SWR configuration with defaults
+      // Determine SWR configuration with defaults and validation
       const swrConfig = this.sharedCacheConfig?.staleWhileRevalidate;
       const swrEnabled = swrConfig?.enabled ?? true;
-      const swrStaleRatio = swrConfig?.staleRatio ?? 0.8;
-      const swrJitter = swrConfig?.jitter ?? 0.1;
+
+      // Clamp staleRatio to [0, 1]
+      const rawStaleRatio = swrConfig?.staleRatio ?? 0.8;
+      const swrStaleRatio = Math.max(0, Math.min(1, rawStaleRatio));
+
+      // Clamp jitter to [0, 0.5]
+      const rawJitter = swrConfig?.jitter ?? 0.1;
+      const swrJitter = Math.max(0, Math.min(0.5, rawJitter));
 
       query = new Query<TData, TError>(
         options,

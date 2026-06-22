@@ -345,45 +345,23 @@ export class Query<TData = unknown, TError = Error> {
    * It fetches fresh data in the background and updates both L1 and L2 caches,
    * allowing subscribers to see the refreshed data.
    *
-   * The revalidation reuses the existing single-flight mechanism, so multiple
-   * concurrent calls will share the same underlying fetch.
+   * Uses fetch() to leverage the existing single-flight mechanism,
+   * so multiple concurrent stale reads will share the same background refresh.
    */
   private revalidateInBackground(): void {
+    // Skip L2 cache on the background fetch to force refresh from source
+    this.skipSharedCacheOnNextFetch = true;
+
     // Fire-and-forget: don't await, don't block the caller
-    this.options
-      .queryFn()
-      .then((freshData) => {
-        // Update L2 (shared cache)
-        if (this.sharedCacheContext) {
-          this.setInSharedCache(freshData);
-        }
-
-        // Update normalized cache if configured
-        if (this.normalizedCacheContext) {
-          this.normalizedShape = this.normalizedCacheContext.cache.normalize(
-            freshData,
-            this.normalizedCacheContext.key,
-          );
-        }
-
-        // Update L1 (in-process state) - subscribers will see the fresh data
-        this.updateState({
-          status: 'success',
-          data: freshData,
-          error: null,
-        });
-
-        // Call success callback
-        this.options.onSuccess?.(freshData);
-      })
-      .catch((error) => {
-        // Background revalidation failed - log but don't throw
-        // The user already has stale data, so we don't want to break their experience
-        this.logCacheWarning(
-          'Background revalidation failed - stale data remains cached',
-          error,
-        );
-      });
+    // Use fetch() which handles single-flight deduplication
+    this.fetch().catch((error) => {
+      // Background revalidation failed - log but don't throw
+      // The user already has stale data, so we don't want to break their experience
+      this.logCacheWarning(
+        'Background revalidation failed - stale data remains cached',
+        error,
+      );
+    });
   }
 
   // ##############################
@@ -418,8 +396,9 @@ export class Query<TData = unknown, TError = Error> {
           const parsed = JSON.parse(cached);
 
           // Check if this is SWR metadata or legacy direct data
+          // Detect based on structure, not config, to handle cached metadata
+          // even if SWR is disabled later
           const isMetadata =
-            ctx.swrEnabled &&
             parsed &&
             typeof parsed === 'object' &&
             'data' in parsed &&
@@ -428,19 +407,29 @@ export class Query<TData = unknown, TError = Error> {
             'hardExpiry' in parsed;
 
           if (isMetadata) {
-            // SWR mode: check staleness
+            // Metadata detected: unwrap and check staleness if SWR is enabled
             const metadata = parsed as CacheEntryMetadata<TData>;
-            const state = getCacheEntryState(metadata, Date.now());
 
-            if (state === 'expired') {
-              // Expired: treat as cache miss
-              return CACHE_MISS;
+            if (ctx.swrEnabled) {
+              // SWR enabled: check staleness
+              const state = getCacheEntryState(metadata, Date.now());
+
+              if (state === 'expired') {
+                // Expired: treat as cache miss
+                return CACHE_MISS;
+              }
+
+              return {
+                data: metadata.data,
+                isStale: state === 'stale',
+              };
+            } else {
+              // SWR disabled but found metadata: treat as fresh (ignore timing)
+              return {
+                data: metadata.data,
+                isStale: false,
+              };
             }
-
-            return {
-              data: metadata.data,
-              isStale: state === 'stale',
-            };
           } else {
             // Legacy mode: return data directly
             return {
@@ -487,11 +476,14 @@ export class Query<TData = unknown, TError = Error> {
       const jitteredHardExpiry = now + applyJitter(baseTTL, ctx.swrJitter);
       const softExpiry = now + baseTTL * ctx.swrStaleRatio;
 
+      // Clamp softExpiry to never exceed hardExpiry (jitter can invert them)
+      const clampedSoftExpiry = Math.min(softExpiry, jitteredHardExpiry);
+
       // Wrap in metadata
       const metadata: CacheEntryMetadata<TData> = {
         data,
         cachedAt: now,
-        softExpiry: Math.round(softExpiry),
+        softExpiry: Math.round(clampedSoftExpiry),
         hardExpiry: Math.round(jitteredHardExpiry),
       };
 
@@ -505,6 +497,24 @@ export class Query<TData = unknown, TError = Error> {
     let serialized: string;
     try {
       serialized = JSON.stringify(valueToStore);
+
+      // Validate that metadata structure survived serialization
+      if (ctx.swrEnabled) {
+        const roundtrip = JSON.parse(serialized);
+        if (
+          !roundtrip ||
+          !('data' in roundtrip) ||
+          !('cachedAt' in roundtrip) ||
+          !('softExpiry' in roundtrip) ||
+          !('hardExpiry' in roundtrip)
+        ) {
+          this.logCacheWarning(
+            'Shared cache write skipped - metadata structure lost during JSON serialization (data may be undefined)',
+            new Error('Metadata validation failed'),
+          );
+          return;
+        }
+      }
     } catch (serializationError) {
       this.logCacheWarning(
         'Shared cache write skipped - data cannot be JSON-serialized',

@@ -6,12 +6,12 @@
  *
  * Formula: `baseTTL * (1 + jitter * random(-1, 1))`
  *
- * @param baseTTL - The base time-to-live in milliseconds
+ * @param baseTTL - The base time-to-live in milliseconds (must be >= 0)
  * @param jitter - The jitter ratio (0-0.5). For example:
  *                 - 0 = no jitter (deterministic)
  *                 - 0.1 = ±10% jitter
  *                 - 0.5 = ±50% jitter (maximum allowed)
- * @returns The jittered TTL in milliseconds (integer)
+ * @returns The jittered TTL in milliseconds (integer, >= 0)
  *
  * @example
  * ```ts
@@ -21,7 +21,18 @@
  * ```
  */
 export function applyJitter(baseTTL: number, jitter: number): number {
-  if (jitter === 0) {
+  // Input validation
+  if (!Number.isFinite(baseTTL) || baseTTL < 0) {
+    throw new Error(
+      `baseTTL must be a finite non-negative number, got: ${baseTTL}`,
+    );
+  }
+
+  if (!Number.isFinite(jitter) || jitter < 0 || jitter > 0.5) {
+    throw new Error(`jitter must be between 0 and 0.5, got: ${jitter}`);
+  }
+
+  if (jitter === 0 || baseTTL === 0) {
     return baseTTL;
   }
 
@@ -31,6 +42,6 @@ export function applyJitter(baseTTL: number, jitter: number): number {
   // Apply jitter: baseTTL * (1 + jitter * random(-1, 1))
   const jitteredTTL = baseTTL * (1 + jitter * randomFactor);
 
-  // Return integer milliseconds
-  return Math.round(jitteredTTL);
+  // Return integer milliseconds, clamped to non-negative
+  return Math.max(0, Math.round(jitteredTTL));
 }
