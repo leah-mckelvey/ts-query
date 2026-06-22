@@ -40,5 +40,28 @@ export function useQuery<TData = unknown, TError = Error>(
     }
   }, [query, enabled]);
 
+  // Handle refetchOnMount
+  // This effect runs when the query instance changes (e.g., queryKey change)
+  // or when enabled flips from false to true
+  useEffect(() => {
+    const refetchOnMount = options.refetchOnMount ?? 'stale-only';
+
+    if (!enabled) return;
+
+    // Always refetch when this query becomes active
+    if (refetchOnMount === true) {
+      query.fetch().catch(() => {
+        // Error already handled by Query class / surfaced via state.
+      });
+    }
+    // Refetch only if stale (default behavior)
+    else if (refetchOnMount === 'stale-only' && query.state.isStale) {
+      query.fetch().catch(() => {
+        // Error already handled by Query class / surfaced via state.
+      });
+    }
+    // false: never refetch on mount
+  }, [query, enabled, options.refetchOnMount]);
+
   return state;
 }

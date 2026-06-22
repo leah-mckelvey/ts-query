@@ -14,7 +14,7 @@ describe('Query', () => {
   it('should initialize with idle state', () => {
     const query = new Query({
       queryKey: 'test',
-      queryFn: async () => 'data',
+      queryFn: async (_signal) => 'data',
     });
 
     expect(query.state.status).toBe('idle');
@@ -51,7 +51,7 @@ describe('Query', () => {
     const error = new Error('Test error');
     const query = new Query({
       queryKey: 'test',
-      queryFn: async () => 'data',
+      queryFn: async (_signal) => 'data',
     });
 
     // Simulate error state without triggering unhandled rejections
@@ -103,7 +103,7 @@ describe('Query', () => {
     const subscriber = vi.fn();
     const query = new Query({
       queryKey: 'test',
-      queryFn: async () => 'data',
+      queryFn: async (_signal) => 'data',
     });
 
     query.subscribe({ next: subscriber });
@@ -122,7 +122,7 @@ describe('Query', () => {
     const subscriber = vi.fn();
     const query = new Query({
       queryKey: 'test',
-      queryFn: async () => 'data',
+      queryFn: async (_signal) => 'data',
     });
 
     const unsubscribe = query.subscribe({ next: subscriber });
@@ -152,7 +152,7 @@ describe('Query', () => {
     const onSuccess = vi.fn();
     const query = new Query({
       queryKey: 'test',
-      queryFn: async () => 'data',
+      queryFn: async (_signal) => 'data',
       onSuccess,
     });
 
@@ -166,7 +166,7 @@ describe('Query', () => {
     const onError = vi.fn();
     const query = new Query({
       queryKey: 'test',
-      queryFn: async () => 'data',
+      queryFn: async (_signal) => 'data',
       onError,
     });
 

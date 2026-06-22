@@ -12,6 +12,8 @@ export { Mutation } from './mutation';
 
 export { createStore } from './store';
 export { NormalizedCache } from './normalized-cache';
+export { focusManager } from './focus-manager';
+export { networkManager } from './network-manager';
 
 // #######################################
 // TYPE EXPORTS
@@ -27,6 +29,7 @@ export type {
   QueryState,
   QueryOptions,
   QueryClientConfig,
+  QueryFilters,
   Subscriber,
 } from './types';
 
@@ -45,6 +48,8 @@ export type {
   SharedCacheConfig,
   NormalizedCacheConfig,
   TypePolicy,
+  DehydratedState,
+  DehydratedQuery,
 } from './types';
 
 // ##############################
