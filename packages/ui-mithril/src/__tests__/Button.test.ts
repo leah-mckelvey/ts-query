@@ -1,6 +1,59 @@
 import m from 'mithril';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { Button } from '../Button';
+import { Button, type ButtonAttrs } from '../Button';
+
+// Test helpers implementing Embedded Design principle
+type StyleAssertions = Record<string, string>;
+
+const testButtonStyles = (
+  container: HTMLElement,
+  props: ButtonAttrs,
+  children: string,
+  expectedStyles: StyleAssertions,
+) => {
+  m.mount(container, { view: () => m(Button, props, children) });
+  const element = container.firstChild as HTMLElement;
+
+  Object.entries(expectedStyles).forEach(([property, expected]) => {
+    expect(element.style[property as any]).toBe(expected);
+  });
+};
+
+// Design concept: variant-color mapping
+// Each variant applies colors to different CSS properties
+type VariantColorProperties = {
+  variant: ButtonAttrs['variant'];
+  colorProperties: string[]; // CSS properties that receive the theme color
+  baseProperties?: StyleAssertions; // Always-true properties
+};
+
+const VARIANT_COLOR_MAPPINGS: VariantColorProperties[] = [
+  {
+    variant: 'solid',
+    colorProperties: ['backgroundColor'],
+    baseProperties: { color: '#ffffff', borderColor: 'transparent' },
+  },
+  {
+    variant: 'outline',
+    colorProperties: ['borderColor', 'color'],
+    baseProperties: { backgroundColor: 'transparent' },
+  },
+  {
+    variant: 'ghost',
+    colorProperties: ['color'],
+    baseProperties: {
+      backgroundColor: 'transparent',
+      borderColor: 'transparent',
+    },
+  },
+];
+
+const COLOR_SCHEMES = {
+  blue: '#3182ce',
+  gray: '#4a5568',
+  red: '#e53e3e',
+  green: '#38a169',
+} as const;
 
 describe('Button', () => {
   let container: HTMLElement;
@@ -114,8 +167,8 @@ describe('Button', () => {
       });
       const element = container.firstChild as HTMLElement;
 
-      expect(element.style.backgroundColor).toBe('rgb(49, 130, 206)'); // default blue
-      expect(element.style.color).toBe('rgb(255, 255, 255)');
+      expect(element.style.backgroundColor).toBe('#3182ce'); // default blue
+      expect(element.style.color).toBe('#ffffff');
       expect(element.style.borderColor).toBe('transparent');
     });
 
@@ -123,8 +176,8 @@ describe('Button', () => {
       m.mount(container, { view: () => m(Button, 'Default') });
       const element = container.firstChild as HTMLElement;
 
-      expect(element.style.backgroundColor).toBe('rgb(49, 130, 206)');
-      expect(element.style.color).toBe('rgb(255, 255, 255)');
+      expect(element.style.backgroundColor).toBe('#3182ce');
+      expect(element.style.color).toBe('#ffffff');
     });
 
     it('applies outline variant with border color', () => {
@@ -133,8 +186,8 @@ describe('Button', () => {
       });
       const element = container.firstChild as HTMLElement;
 
-      expect(element.style.borderColor).toBe('rgb(49, 130, 206)'); // default blue
-      expect(element.style.color).toBe('rgb(49, 130, 206)');
+      expect(element.style.borderColor).toBe('#3182ce'); // default blue
+      expect(element.style.color).toBe('#3182ce');
       expect(element.style.backgroundColor).toBe('transparent');
     });
 
@@ -144,164 +197,61 @@ describe('Button', () => {
       });
       const element = container.firstChild as HTMLElement;
 
-      expect(element.style.color).toBe('rgb(49, 130, 206)'); // default blue
+      expect(element.style.color).toBe('#3182ce'); // default blue
       expect(element.style.backgroundColor).toBe('transparent');
       expect(element.style.borderColor).toBe('transparent');
     });
   });
 
   describe('colorScheme prop (design tokens)', () => {
-    describe('solid variant', () => {
-      it('applies blue color scheme (default)', () => {
-        m.mount(container, {
-          view: () =>
-            m(Button, { variant: 'solid', colorScheme: 'blue' }, 'Blue'),
+    // Refactored using Embedded Design principle:
+    // The test structure now makes explicit the Cartesian product: variants × colorSchemes
+    // Each variant has specific CSS properties that receive the color
+    VARIANT_COLOR_MAPPINGS.forEach(
+      ({ variant, colorProperties, baseProperties }) => {
+        describe(`${variant} variant`, () => {
+          Object.entries(COLOR_SCHEMES).forEach(([schemeName, schemeColor]) => {
+            it(`applies ${schemeName} color scheme`, () => {
+              const expectedStyles: StyleAssertions = {
+                ...baseProperties,
+                ...Object.fromEntries(
+                  colorProperties.map((prop) => [prop, schemeColor]),
+                ),
+              };
+
+              testButtonStyles(
+                container,
+                {
+                  variant,
+                  colorScheme: schemeName as keyof typeof COLOR_SCHEMES,
+                },
+                schemeName,
+                expectedStyles,
+              );
+            });
+          });
+
+          // Test default colorScheme behavior (blue is default)
+          if (variant === 'solid') {
+            it('defaults to blue color scheme when no colorScheme provided', () => {
+              const expectedStyles: StyleAssertions = {
+                ...baseProperties,
+                ...Object.fromEntries(
+                  colorProperties.map((prop) => [prop, COLOR_SCHEMES.blue]),
+                ),
+              };
+
+              testButtonStyles(
+                container,
+                { variant },
+                'Default',
+                expectedStyles,
+              );
+            });
+          }
         });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.backgroundColor).toBe('rgb(49, 130, 206)');
-        expect(element.style.color).toBe('rgb(255, 255, 255)');
-      });
-
-      it('defaults to blue color scheme when no colorScheme provided', () => {
-        m.mount(container, {
-          view: () => m(Button, { variant: 'solid' }, 'Default'),
-        });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.backgroundColor).toBe('rgb(49, 130, 206)');
-        expect(element.style.color).toBe('rgb(255, 255, 255)');
-      });
-
-      it('applies gray color scheme', () => {
-        m.mount(container, {
-          view: () =>
-            m(Button, { variant: 'solid', colorScheme: 'gray' }, 'Gray'),
-        });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.backgroundColor).toBe('rgb(74, 85, 104)');
-        expect(element.style.color).toBe('rgb(255, 255, 255)');
-      });
-
-      it('applies red color scheme', () => {
-        m.mount(container, {
-          view: () =>
-            m(Button, { variant: 'solid', colorScheme: 'red' }, 'Red'),
-        });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.backgroundColor).toBe('rgb(229, 62, 62)');
-        expect(element.style.color).toBe('rgb(255, 255, 255)');
-      });
-
-      it('applies green color scheme', () => {
-        m.mount(container, {
-          view: () =>
-            m(Button, { variant: 'solid', colorScheme: 'green' }, 'Green'),
-        });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.backgroundColor).toBe('rgb(56, 161, 105)');
-        expect(element.style.color).toBe('rgb(255, 255, 255)');
-      });
-    });
-
-    describe('outline variant', () => {
-      it('applies blue color scheme', () => {
-        m.mount(container, {
-          view: () =>
-            m(Button, { variant: 'outline', colorScheme: 'blue' }, 'Blue'),
-        });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.borderColor).toBe('rgb(49, 130, 206)');
-        expect(element.style.color).toBe('rgb(49, 130, 206)');
-        expect(element.style.backgroundColor).toBe('transparent');
-      });
-
-      it('applies gray color scheme', () => {
-        m.mount(container, {
-          view: () =>
-            m(Button, { variant: 'outline', colorScheme: 'gray' }, 'Gray'),
-        });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.borderColor).toBe('rgb(74, 85, 104)');
-        expect(element.style.color).toBe('rgb(74, 85, 104)');
-        expect(element.style.backgroundColor).toBe('transparent');
-      });
-
-      it('applies red color scheme', () => {
-        m.mount(container, {
-          view: () =>
-            m(Button, { variant: 'outline', colorScheme: 'red' }, 'Red'),
-        });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.borderColor).toBe('rgb(229, 62, 62)');
-        expect(element.style.color).toBe('rgb(229, 62, 62)');
-        expect(element.style.backgroundColor).toBe('transparent');
-      });
-
-      it('applies green color scheme', () => {
-        m.mount(container, {
-          view: () =>
-            m(Button, { variant: 'outline', colorScheme: 'green' }, 'Green'),
-        });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.borderColor).toBe('rgb(56, 161, 105)');
-        expect(element.style.color).toBe('rgb(56, 161, 105)');
-        expect(element.style.backgroundColor).toBe('transparent');
-      });
-    });
-
-    describe('ghost variant', () => {
-      it('applies blue color scheme', () => {
-        m.mount(container, {
-          view: () =>
-            m(Button, { variant: 'ghost', colorScheme: 'blue' }, 'Blue'),
-        });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.color).toBe('rgb(49, 130, 206)');
-        expect(element.style.backgroundColor).toBe('transparent');
-      });
-
-      it('applies gray color scheme', () => {
-        m.mount(container, {
-          view: () =>
-            m(Button, { variant: 'ghost', colorScheme: 'gray' }, 'Gray'),
-        });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.color).toBe('rgb(74, 85, 104)');
-        expect(element.style.backgroundColor).toBe('transparent');
-      });
-
-      it('applies red color scheme', () => {
-        m.mount(container, {
-          view: () =>
-            m(Button, { variant: 'ghost', colorScheme: 'red' }, 'Red'),
-        });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.color).toBe('rgb(229, 62, 62)');
-        expect(element.style.backgroundColor).toBe('transparent');
-      });
-
-      it('applies green color scheme', () => {
-        m.mount(container, {
-          view: () =>
-            m(Button, { variant: 'ghost', colorScheme: 'green' }, 'Green'),
-        });
-        const element = container.firstChild as HTMLElement;
-
-        expect(element.style.color).toBe('rgb(56, 161, 105)');
-        expect(element.style.backgroundColor).toBe('transparent');
-      });
-    });
+      },
+    );
   });
 
   describe('combined props (design token combinations)', () => {
@@ -314,7 +264,7 @@ describe('Button', () => {
 
       expect(element.style.fontSize).toBe('1.125rem');
       expect(element.style.padding).toBe('10px 20px');
-      expect(element.style.borderColor).toBe('rgb(49, 130, 206)');
+      expect(element.style.borderColor).toBe('#3182ce');
       expect(element.style.backgroundColor).toBe('transparent');
     });
 
@@ -331,8 +281,8 @@ describe('Button', () => {
 
       expect(element.style.fontSize).toBe('0.875rem');
       expect(element.style.padding).toBe('6px 12px');
-      expect(element.style.backgroundColor).toBe('rgb(229, 62, 62)');
-      expect(element.style.color).toBe('rgb(255, 255, 255)');
+      expect(element.style.backgroundColor).toBe('#e53e3e');
+      expect(element.style.color).toBe('#ffffff');
     });
   });
 
@@ -351,8 +301,8 @@ describe('Button', () => {
       });
       const element = container.firstChild as HTMLElement;
 
-      expect(element.style.backgroundColor).toBe('rgb(49, 130, 206)');
-      expect(element.style.color).toBe('rgb(255, 255, 255)');
+      expect(element.style.backgroundColor).toBe('#3182ce');
+      expect(element.style.color).toBe('#ffffff');
       expect(element.style.border).toBe('2px dashed red');
       expect(element.style.textTransform).toBe('uppercase');
     });

@@ -163,7 +163,7 @@ describe('Box', () => {
     it('applies bg (background color)', () => {
       m.mount(container, { view: () => m(Box, { bg: '#3182ce' }, 'Content') });
       const element = container.firstChild as HTMLElement;
-      expect(element.style.backgroundColor).toBe('rgb(49, 130, 206)');
+      expect(element.style.backgroundColor).toBe('#3182ce');
     });
 
     it('applies color (text color)', () => {
@@ -171,7 +171,7 @@ describe('Box', () => {
         view: () => m(Box, { color: '#ffffff' }, 'Content'),
       });
       const element = container.firstChild as HTMLElement;
-      expect(element.style.color).toBe('rgb(255, 255, 255)');
+      expect(element.style.color).toBe('#ffffff');
     });
 
     it('applies both bg and color together', () => {
@@ -179,8 +179,8 @@ describe('Box', () => {
         view: () => m(Box, { bg: '#4a5568', color: '#ffffff' }, 'Content'),
       });
       const element = container.firstChild as HTMLElement;
-      expect(element.style.backgroundColor).toBe('rgb(74, 85, 104)');
-      expect(element.style.color).toBe('rgb(255, 255, 255)');
+      expect(element.style.backgroundColor).toBe('#4a5568');
+      expect(element.style.color).toBe('#ffffff');
     });
   });
 
@@ -222,7 +222,7 @@ describe('Box', () => {
       });
       const element = container.firstChild as HTMLElement;
       expect(element.style.padding).toBe('16px');
-      expect(element.style.backgroundColor).toBe('rgb(49, 130, 206)');
+      expect(element.style.backgroundColor).toBe('#3182ce');
       expect(element.style.border).toBe('1px solid black');
       expect(element.style.display).toBe('flex');
     });
@@ -283,7 +283,7 @@ describe('Box', () => {
       expect(outer.style.backgroundColor).toBe('rgb(226, 232, 240)');
 
       expect(inner.style.padding).toBe('8px');
-      expect(inner.style.backgroundColor).toBe('rgb(255, 255, 255)');
+      expect(inner.style.backgroundColor).toBe('#ffffff');
 
       expect(outer.contains(inner)).toBe(true);
     });
