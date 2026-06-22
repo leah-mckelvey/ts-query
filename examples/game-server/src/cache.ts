@@ -80,26 +80,86 @@ export class InMemoryAdapter implements SharedCacheAdapter {
 // Redis Adapter (for production / multi-process)
 // ============================================================================
 
-// This is a placeholder showing what a Redis adapter would look like.
-// In production, you'd use ioredis or redis package.
+// This is a placeholder showing what a Redis adapter with cross-process
+// invalidation would look like. In production, you'd use ioredis or redis package.
 
 /*
 import Redis from 'ioredis';
 
 export class RedisAdapter implements SharedCacheAdapter {
-  constructor(private redis: Redis) {}
+  private redis: Redis;
+  private subscriber: Redis;
+  private callbacks = new Map<string, Set<(key: string) => void>>();
+  private readonly INVALIDATION_CHANNEL = 'ts-query:invalidations';
+  private readonly KEY_PREFIX = 'game:';
+
+  constructor(redisUrl: string) {
+    this.redis = new Redis(redisUrl);
+    this.subscriber = new Redis(redisUrl);
+
+    // Subscribe to the invalidation channel
+    this.subscriber.subscribe(this.INVALIDATION_CHANNEL);
+    this.subscriber.on('message', (channel, message) => {
+      if (channel === this.INVALIDATION_CHANNEL) {
+        const { key, fromClientId } = JSON.parse(message);
+        // Notify all registered callbacks for this client except the sender
+        this.callbacks.forEach((callbacks, clientId) => {
+          if (clientId !== fromClientId) {
+            callbacks.forEach((callback) => callback(key));
+          }
+        });
+      }
+    });
+  }
 
   async get(key: string): Promise<string | null> {
-    return this.redis.get(`game:${key}`);
+    return this.redis.get(`${this.KEY_PREFIX}${key}`);
   }
 
   async set(key: string, value: string, ttlMs: number): Promise<void> {
     // Redis PSETEX takes TTL in milliseconds
-    await this.redis.psetex(`game:${key}`, ttlMs, value);
+    await this.redis.psetex(`${this.KEY_PREFIX}${key}`, ttlMs, value);
   }
 
   async delete(key: string): Promise<void> {
-    await this.redis.del(`game:${key}`);
+    await this.redis.del(`${this.KEY_PREFIX}${key}`);
+  }
+
+  async clear(): Promise<void> {
+    const keys = await this.redis.keys(`${this.KEY_PREFIX}*`);
+    if (keys.length > 0) {
+      await this.redis.del(...keys);
+    }
+  }
+
+  subscribeToInvalidations(
+    clientId: string,
+    callback: (key: string) => void,
+  ): () => void {
+    if (!this.callbacks.has(clientId)) {
+      this.callbacks.set(clientId, new Set());
+    }
+    this.callbacks.get(clientId)!.add(callback);
+
+    // Return unsubscribe function
+    return () => {
+      this.callbacks.get(clientId)?.delete(callback);
+      if (this.callbacks.get(clientId)?.size === 0) {
+        this.callbacks.delete(clientId);
+      }
+    };
+  }
+
+  async publishInvalidation(key: string, fromClientId: string): Promise<void> {
+    await this.redis.publish(
+      this.INVALIDATION_CHANNEL,
+      JSON.stringify({ key, fromClientId }),
+    );
+  }
+
+  async destroy(): Promise<void> {
+    await this.subscriber.quit();
+    await this.redis.quit();
   }
 }
 */

@@ -20,6 +20,15 @@ import type {
 const DEFAULT_SHARED_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // ########################################
+// UTILITIES
+// ########################################
+
+let clientIdCounter = 0;
+function generateClientId(): string {
+  return `client-${Date.now()}-${++clientIdCounter}`;
+}
+
+// ########################################
 // QUERY CLIENT
 // ########################################
 
@@ -30,15 +39,45 @@ export class QueryClient {
   private queries = new Map<string, Query<unknown, unknown>>();
   private sharedCacheConfig?: SharedCacheConfig;
   private normalizedCache?: NormalizedCache;
+  private clientId: string;
+  private invalidationUnsubscribe?: () => void;
 
   // ##############################
   // Initialization
   // ##############################
 
   constructor(config?: QueryClientConfig) {
+    this.clientId = generateClientId();
     this.sharedCacheConfig = config?.sharedCache;
     if (config?.normalizedCache) {
       this.normalizedCache = new NormalizedCache(config.normalizedCache);
+    }
+
+    // Subscribe to cross-process invalidations if the adapter supports it
+    if (
+      this.sharedCacheConfig?.adapter.subscribeToInvalidations &&
+      this.sharedCacheConfig?.adapter.publishInvalidation
+    ) {
+      this.invalidationUnsubscribe =
+        this.sharedCacheConfig.adapter.subscribeToInvalidations(
+          this.clientId,
+          (key) => this.handleRemoteInvalidation(key),
+        );
+    }
+  }
+
+  // ##############################
+  // Cross-Process Invalidation
+  // ##############################
+
+  /**
+   * Handle an invalidation message from another worker.
+   * This invalidates the local L1 cache without triggering another broadcast.
+   */
+  private handleRemoteInvalidation(key: string): void {
+    const query = this.queries.get(key);
+    if (query) {
+      query.invalidate();
     }
   }
 
@@ -126,6 +165,11 @@ export class QueryClient {
 
   /**
    * Invalidate queries, optionally clearing from shared cache as well.
+   * For cross-process invalidation, the order is critical:
+   * 1. Delete from L2 (shared cache)
+   * 2. Broadcast invalidation to other workers
+   * 3. Invalidate local L1
+   * This ensures other workers never re-populate L1 from stale L2 data.
    */
   invalidateQueries(queryKey?: QueryKey): void {
     this.applyQueryOperation(
@@ -133,8 +177,28 @@ export class QueryClient {
       (query) => query.invalidate(),
       (query) => query.invalidate(),
       (key) => {
-        // Also invalidate in shared cache (fire-and-forget, errors are swallowed)
-        this.sharedCacheConfig?.adapter.delete(key).catch(() => {});
+        // Critical ordering: L2 delete MUST complete before broadcast
+        // to prevent race where another worker repopulates L1 from stale L2
+        this.sharedCacheConfig?.adapter
+          .delete(key)
+          .then(() => {
+            // After L2 is cleared, broadcast to other workers
+            this.sharedCacheConfig?.adapter
+              .publishInvalidation?.(key, this.clientId)
+              .catch((error) => {
+                console.warn(
+                  `[ts-query] Failed to broadcast invalidation for key "${key}":`,
+                  error,
+                );
+              });
+          })
+          .catch((error) => {
+            console.warn(
+              `[ts-query] Shared cache delete failed for key "${key}":`,
+              error,
+            );
+            // L2 delete failure should not prevent local invalidation
+          });
       },
     );
     // Important: We intentionally do NOT clear the entire shared cache (L2) when queryKey is undefined because:
@@ -154,8 +218,13 @@ export class QueryClient {
       },
       (query) => query.destroy(),
       (key) => {
-        // Also remove from shared cache (fire-and-forget, errors are swallowed)
-        this.sharedCacheConfig?.adapter.delete(key).catch(() => {});
+        // Also remove from shared cache (fire-and-forget, errors are logged but don't block)
+        this.sharedCacheConfig?.adapter.delete(key).catch((error) => {
+          console.warn(
+            `[ts-query] Shared cache delete failed for key "${key}":`,
+            error,
+          );
+        });
       },
     );
     if (!queryKey) {
@@ -295,5 +364,17 @@ export class QueryClient {
         // Silently ignore shared cache clear errors
       }
     }
+  }
+
+  /**
+   * Destroy the QueryClient and clean up all resources.
+   * This includes unsubscribing from cross-process invalidation messages.
+   */
+  destroy(): void {
+    // Unsubscribe from invalidation messages
+    this.invalidationUnsubscribe?.();
+
+    // Clear all queries
+    this.removeQueries();
   }
 }
