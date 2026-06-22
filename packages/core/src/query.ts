@@ -3,9 +3,16 @@
 // ########################################
 
 import { BehaviorSubject, type Observable } from 'rxjs';
-import type { QueryOptions, QueryState, SharedCacheAdapter } from './types';
+import type {
+  QueryOptions,
+  QueryState,
+  SharedCacheAdapter,
+  CacheEntryMetadata,
+} from './types';
 import { deriveStatusFlags, createInitialQueryState } from './types';
 import type { NormalizedCache } from './normalized-cache';
+import { applyJitter } from './utils/jitter';
+import { getCacheEntryState } from './utils/cache-state';
 
 // ########################################
 // TYPE DEFINITIONS
@@ -33,6 +40,9 @@ export interface SharedCacheContext {
   adapter: SharedCacheAdapter;
   key: string;
   ttl: number;
+  swrEnabled: boolean;
+  swrStaleRatio: number;
+  swrJitter: number;
 }
 
 /**
@@ -42,6 +52,14 @@ export interface NormalizedCacheContext {
   cache: NormalizedCache;
   /** The serialized query key used as the identity within the normalized cache. */
   key: string;
+}
+
+/**
+ * Result from shared cache read, including staleness information.
+ */
+interface SharedCacheResult<TData> {
+  data: TData;
+  isStale: boolean;
 }
 
 // ########################################
@@ -228,11 +246,17 @@ export class Query<TData = unknown, TError = Error> {
     try {
       // L2: Check shared cache first (only if configured and not skipped)
       if (this.sharedCacheContext && !shouldSkipSharedCache) {
-        const cachedData = await this.getFromSharedCache();
-        if (cachedData !== CACHE_MISS) {
+        const cacheResult = await this.getFromSharedCache();
+        if (cacheResult !== CACHE_MISS) {
           // L2 hit: populate L1 and return
-          this.completeFetchSuccess(cachedData);
-          return cachedData;
+          this.completeFetchSuccess(cacheResult.data);
+
+          // If stale, trigger background revalidation (fire-and-forget)
+          if (cacheResult.isStale) {
+            this.revalidateInBackground();
+          }
+
+          return cacheResult.data;
         }
       }
 
@@ -310,26 +334,109 @@ export class Query<TData = unknown, TError = Error> {
     this.scheduleGarbageCollection();
   }
 
+  // ####################
+  // Background Revalidation
+  // ####################
+
+  /**
+   * Trigger background revalidation for stale data.
+   *
+   * This is called when stale-while-revalidate serves stale cached data.
+   * It fetches fresh data in the background and updates both L1 and L2 caches,
+   * allowing subscribers to see the refreshed data.
+   *
+   * Uses fetch() to leverage the existing single-flight mechanism,
+   * so multiple concurrent stale reads will share the same background refresh.
+   */
+  private revalidateInBackground(): void {
+    // Skip L2 cache on the background fetch to force refresh from source
+    this.skipSharedCacheOnNextFetch = true;
+
+    // Fire-and-forget: don't await, don't block the caller
+    // Use fetch() which handles single-flight deduplication
+    this.fetch().catch((error) => {
+      // Background revalidation failed - log but don't throw
+      // The user already has stale data, so we don't want to break their experience
+      this.logCacheWarning(
+        'Background revalidation failed - stale data remains cached',
+        error,
+      );
+    });
+  }
+
   // ##############################
   // Shared Cache Operations (L2)
   // ##############################
 
   /**
    * Try to get data from the shared cache (L2).
-   * Returns the parsed data if found, or CACHE_MISS sentinel if not found or on error.
+   * Returns the parsed data with staleness info if found, or CACHE_MISS sentinel if not found or on error.
    * Using a unique symbol ensures that legitimate null/undefined values are not
    * confused with cache misses.
+   *
+   * When SWR is enabled:
+   * - Fresh entries: returned with isStale=false
+   * - Stale entries: returned with isStale=true (caller should trigger background refresh)
+   * - Expired entries: treated as CACHE_MISS
+   *
+   * When SWR is disabled (legacy mode):
+   * - All valid entries returned with isStale=false
    */
-  private async getFromSharedCache(): Promise<TData | CacheMiss> {
+  private async getFromSharedCache(): Promise<
+    SharedCacheResult<TData> | CacheMiss
+  > {
     if (!this.sharedCacheContext) return CACHE_MISS;
 
+    const ctx = this.sharedCacheContext;
+
     try {
-      const cached = await this.sharedCacheContext.adapter.get(
-        this.sharedCacheContext.key,
-      );
+      const cached = await ctx.adapter.get(ctx.key);
       if (cached != null) {
         try {
-          return JSON.parse(cached) as TData;
+          const parsed = JSON.parse(cached);
+
+          // Check if this is SWR metadata or legacy direct data
+          // Detect based on structure, not config, to handle cached metadata
+          // even if SWR is disabled later
+          const isMetadata =
+            parsed &&
+            typeof parsed === 'object' &&
+            'data' in parsed &&
+            'cachedAt' in parsed &&
+            'softExpiry' in parsed &&
+            'hardExpiry' in parsed;
+
+          if (isMetadata) {
+            // Metadata detected: unwrap and check staleness if SWR is enabled
+            const metadata = parsed as CacheEntryMetadata<TData>;
+
+            if (ctx.swrEnabled) {
+              // SWR enabled: check staleness
+              const state = getCacheEntryState(metadata, Date.now());
+
+              if (state === 'expired') {
+                // Expired: treat as cache miss
+                return CACHE_MISS;
+              }
+
+              return {
+                data: metadata.data,
+                isStale: state === 'stale',
+              };
+            } else {
+              // SWR disabled but found metadata: treat as fresh (ignore timing)
+              return {
+                data: metadata.data,
+                isStale: false,
+              };
+            }
+          } else {
+            // Legacy mode: return data directly
+            return {
+              data: parsed as TData,
+              isStale: false,
+            };
+          }
         } catch (parseError) {
           this.logCacheWarning(
             'Shared cache parse failed - cached data is malformed or corrupted',
@@ -347,6 +454,9 @@ export class Query<TData = unknown, TError = Error> {
   /**
    * Store data in the shared cache (L2).
    *
+   * When SWR is enabled, wraps data in CacheEntryMetadata with timing windows.
+   * Otherwise, stores data directly for backward compatibility.
+   *
    * Note: Only values that can be safely JSON-serialized will be stored.
    * Data containing circular references, BigInt, or other non-JSON-safe types
    * will not be stored and will fall back to L3 on next fetch.
@@ -354,10 +464,57 @@ export class Query<TData = unknown, TError = Error> {
   private async setInSharedCache(data: TData): Promise<void> {
     if (!this.sharedCacheContext) return;
 
+    const ctx = this.sharedCacheContext;
+    const now = Date.now();
+
+    // Prepare the value to store
+    let valueToStore: TData | CacheEntryMetadata<TData>;
+
+    if (ctx.swrEnabled) {
+      // Calculate timing windows
+      const baseTTL = ctx.ttl;
+      const jitteredHardExpiry = now + applyJitter(baseTTL, ctx.swrJitter);
+      const softExpiry = now + baseTTL * ctx.swrStaleRatio;
+
+      // Clamp softExpiry to never exceed hardExpiry (jitter can invert them)
+      const clampedSoftExpiry = Math.min(softExpiry, jitteredHardExpiry);
+
+      // Wrap in metadata
+      const metadata: CacheEntryMetadata<TData> = {
+        data,
+        cachedAt: now,
+        softExpiry: Math.round(clampedSoftExpiry),
+        hardExpiry: Math.round(jitteredHardExpiry),
+      };
+
+      valueToStore = metadata;
+    } else {
+      // Legacy mode: store data directly
+      valueToStore = data;
+    }
+
     // Pre-validate JSON serialization to catch circular refs, BigInt, etc.
     let serialized: string;
     try {
-      serialized = JSON.stringify(data);
+      serialized = JSON.stringify(valueToStore);
+
+      // Validate that metadata structure survived serialization
+      if (ctx.swrEnabled) {
+        const roundtrip = JSON.parse(serialized);
+        if (
+          !roundtrip ||
+          !('data' in roundtrip) ||
+          !('cachedAt' in roundtrip) ||
+          !('softExpiry' in roundtrip) ||
+          !('hardExpiry' in roundtrip)
+        ) {
+          this.logCacheWarning(
+            'Shared cache write skipped - metadata structure lost during JSON serialization (data may be undefined)',
+            new Error('Metadata validation failed'),
+          );
+          return;
+        }
+      }
     } catch (serializationError) {
       this.logCacheWarning(
         'Shared cache write skipped - data cannot be JSON-serialized',
@@ -367,11 +524,12 @@ export class Query<TData = unknown, TError = Error> {
     }
 
     try {
-      await this.sharedCacheContext.adapter.set(
-        this.sharedCacheContext.key,
-        serialized,
-        this.sharedCacheContext.ttl,
-      );
+      // Use jittered hard expiry as the adapter TTL
+      const adapterTTL = ctx.swrEnabled
+        ? (valueToStore as CacheEntryMetadata<TData>).hardExpiry - now
+        : ctx.ttl;
+
+      await ctx.adapter.set(ctx.key, serialized, adapterTTL);
     } catch (cacheError) {
       this.logCacheWarning('Shared cache write failed', cacheError);
     }

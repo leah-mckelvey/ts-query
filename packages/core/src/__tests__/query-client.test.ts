@@ -339,11 +339,30 @@ describe('QueryClient with SharedCache (L2)', () => {
 
     await query.fetch();
 
-    expect(adapter.set).toHaveBeenCalledWith(
-      'test-key',
-      JSON.stringify({ id: 1, name: 'Test' }),
-      30000,
-    );
+    // Verify adapter.set was called
+    expect(adapter.set).toHaveBeenCalledTimes(1);
+    const [key, value, ttl] = adapter.set.mock.calls[0];
+
+    // Verify key
+    expect(key).toBe('test-key');
+
+    // Verify value contains metadata (SWR enabled by default)
+    const metadata = JSON.parse(value);
+    expect(metadata).toMatchObject({
+      data: { id: 1, name: 'Test' },
+    });
+    expect(metadata.cachedAt).toBeTypeOf('number');
+    expect(metadata.softExpiry).toBeTypeOf('number');
+    expect(metadata.hardExpiry).toBeTypeOf('number');
+
+    // Verify timing windows (80% stale ratio with 30s TTL)
+    const staleWindow = metadata.softExpiry - metadata.cachedAt;
+    expect(staleWindow).toBeCloseTo(30000 * 0.8, -2); // ~24000ms
+
+    // Verify TTL has jitter applied (±10% of 30000ms)
+    expect(ttl).toBeGreaterThanOrEqual(30000 * 0.9);
+    expect(ttl).toBeLessThanOrEqual(30000 * 1.1);
+
     expect(store.has('test-key')).toBe(true);
   });
 
@@ -363,7 +382,19 @@ describe('QueryClient with SharedCache (L2)', () => {
 
     await query.fetch();
 
-    expect(adapter.set).toHaveBeenCalledWith('test', '"data"', 5000);
+    // Verify adapter.set was called with the overridden TTL (with jitter)
+    expect(adapter.set).toHaveBeenCalledTimes(1);
+    const [key, value, ttl] = adapter.set.mock.calls[0];
+
+    expect(key).toBe('test');
+
+    // Verify metadata structure
+    const metadata = JSON.parse(value);
+    expect(metadata.data).toBe('data');
+
+    // Verify jittered TTL is based on 5000ms, not 30000ms
+    expect(ttl).toBeGreaterThanOrEqual(5000 * 0.9);
+    expect(ttl).toBeLessThanOrEqual(5000 * 1.1);
   });
 
   it('should skip shared cache when skipSharedCache is true', async () => {
