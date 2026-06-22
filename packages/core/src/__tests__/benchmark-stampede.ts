@@ -127,7 +127,9 @@ async function main(): Promise<void> {
         l1: {
           hits: r.metrics.l1.hits,
           misses: r.metrics.l1.misses,
-          hitRate: (r.metrics.l1.hits / (r.metrics.l1.hits + r.metrics.l1.misses)) * 100,
+          hitRate: r.metrics.l1.hits + r.metrics.l1.misses > 0
+            ? (r.metrics.l1.hits / (r.metrics.l1.hits + r.metrics.l1.misses)) * 100
+            : 0,
           p50: r.metrics.l1.p50,
           p95: r.metrics.l1.p95,
           p99: r.metrics.l1.p99,
@@ -135,7 +137,9 @@ async function main(): Promise<void> {
         l2: {
           hits: r.metrics.l2.hits,
           misses: r.metrics.l2.misses,
-          hitRate: (r.metrics.l2.hits / (r.metrics.l2.hits + r.metrics.l2.misses)) * 100,
+          hitRate: r.metrics.l2.hits + r.metrics.l2.misses > 0
+            ? (r.metrics.l2.hits / (r.metrics.l2.hits + r.metrics.l2.misses)) * 100
+            : 0,
           p50: r.metrics.l2.p50,
           p95: r.metrics.l2.p95,
           p99: r.metrics.l2.p99,

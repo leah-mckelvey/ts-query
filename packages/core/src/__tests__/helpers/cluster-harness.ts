@@ -79,17 +79,9 @@ export class ClusterHarness {
     const workerMetrics: Promise<unknown>[] = [];
     const startTime = Date.now();
 
-    // Resolve worker path - handle both file:// URLs and regular paths
-    let workerPath: string;
-    try {
-      // Try ESM import.meta.url approach
-      const currentDir = dirname(fileURLToPath(import.meta.url));
-      workerPath = join(currentDir, 'worker-entry.ts');
-    } catch {
-      // Fallback for environments where import.meta.url isn't a file URL
-      // This shouldn't happen, but provides safety
-      workerPath = join(__dirname, 'worker-entry.ts');
-    }
+    // Resolve worker path using ESM import.meta.url
+    const currentDir = dirname(fileURLToPath(import.meta.url));
+    const workerPath = join(currentDir, 'worker-entry.ts');
 
     for (let i = 0; i < scenario.workerCount; i++) {
       // Fork worker process with tsx for TypeScript execution

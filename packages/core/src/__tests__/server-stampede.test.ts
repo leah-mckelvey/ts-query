@@ -15,7 +15,7 @@
  * which is the real shared resource we care about protecting.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { QueryClient } from '../query-client';
 import type { SharedCacheAdapter } from '../types';
 

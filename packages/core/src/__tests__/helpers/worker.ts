@@ -17,16 +17,6 @@ let config: WorkerConfig;
 let redis: Redis;
 let metrics: MetricsCollector;
 let queryClient: QueryClient;
-let dbCallCounter = 0;
-
-// Send ready signal immediately
-if (process.send) {
-  const readyMsg: WorkerMessage = {
-    type: 'ready',
-    workerId: -1, // Will be set properly after receiving config
-  };
-  process.send(readyMsg);
-}
 
 // Listen for config from primary
 process.on('message', async (msg: { type: string; data: unknown }) => {
@@ -36,6 +26,18 @@ process.on('message', async (msg: { type: string; data: unknown }) => {
     await runTest();
   }
 });
+
+// Send ready signal after message handler is registered to avoid race condition
+// where parent attaches its listener after we've already sent the message
+if (process.send) {
+  setImmediate(() => {
+    const readyMsg: WorkerMessage = {
+      type: 'ready',
+      workerId: -1, // Will be set properly after receiving config
+    };
+    process.send!(readyMsg);
+  });
+}
 
 async function initWorker(): Promise<void> {
   try {
@@ -96,8 +98,6 @@ async function runTest(): Promise<void> {
       // Track this as an L3 call
       const latency = performance.now() - start;
       await metrics.recordL3Call(latency);
-
-      dbCallCounter++;
 
       return { value: 42 };
     };
