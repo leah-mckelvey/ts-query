@@ -24,20 +24,25 @@ describe('Text', () => {
     });
 
     it('renders custom element when "as" prop is provided', () => {
-      m.mount(container, { view: () => m(Text, { as: 'span' }, 'Text content') });
+      m.mount(container, {
+        view: () => m(Text, { as: 'span' }, 'Text content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.tagName).toBe('SPAN');
     });
 
     it('can render as a div', () => {
-      m.mount(container, { view: () => m(Text, { as: 'div' }, 'Text content') });
+      m.mount(container, {
+        view: () => m(Text, { as: 'div' }, 'Text content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.tagName).toBe('DIV');
     });
 
     it('forwards HTML attributes', () => {
       m.mount(container, {
-        view: () => m(Text, { id: 'custom-id', class: 'custom-class' }, 'Text content'),
+        view: () =>
+          m(Text, { id: 'custom-id', class: 'custom-class' }, 'Text content'),
       });
       const element = container.firstChild as HTMLElement;
       expect(element.getAttribute('id')).toBe('custom-id');
@@ -55,7 +60,9 @@ describe('Text', () => {
 
   describe('fontSize prop (design tokens)', () => {
     it('applies custom fontSize', () => {
-      m.mount(container, { view: () => m(Text, { fontSize: '1.5rem' }, 'Large text') });
+      m.mount(container, {
+        view: () => m(Text, { fontSize: '1.5rem' }, 'Large text'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.fontSize).toBe('1.5rem');
     });
@@ -76,13 +83,17 @@ describe('Text', () => {
 
   describe('fontWeight prop (design tokens)', () => {
     it('applies numeric fontWeight', () => {
-      m.mount(container, { view: () => m(Text, { fontWeight: 700 }, 'Bold text') });
+      m.mount(container, {
+        view: () => m(Text, { fontWeight: 700 }, 'Bold text'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.fontWeight).toBe('700');
     });
 
     it('applies string fontWeight', () => {
-      m.mount(container, { view: () => m(Text, { fontWeight: 'bold' }, 'Bold text') });
+      m.mount(container, {
+        view: () => m(Text, { fontWeight: 'bold' }, 'Bold text'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.fontWeight).toBe('bold');
     });
@@ -91,7 +102,9 @@ describe('Text', () => {
       const weights = [300, 400, 500, 600, 700, 800];
 
       weights.forEach((weight) => {
-        m.mount(container, { view: () => m(Text, { fontWeight: weight }, 'Text') });
+        m.mount(container, {
+          view: () => m(Text, { fontWeight: weight }, 'Text'),
+        });
         const element = container.firstChild as HTMLElement;
         expect(element.style.fontWeight).toBe(String(weight));
         m.mount(container, null);
@@ -108,7 +121,8 @@ describe('Text', () => {
   describe('combined props (design token combinations)', () => {
     it('applies both fontSize and fontWeight', () => {
       m.mount(container, {
-        view: () => m(Text, { fontSize: '1.5rem', fontWeight: 600 }, 'Styled text'),
+        view: () =>
+          m(Text, { fontSize: '1.5rem', fontWeight: 600 }, 'Styled text'),
       });
       const element = container.firstChild as HTMLElement;
       expect(element.style.fontSize).toBe('1.5rem');
@@ -122,8 +136,11 @@ describe('Text', () => {
         view: () =>
           m(
             Text,
-            { fontSize: '1.5rem', style: { color: 'red', textAlign: 'center' } },
-            'Custom styled'
+            {
+              fontSize: '1.5rem',
+              style: { color: 'red', textAlign: 'center' },
+            },
+            'Custom styled',
           ),
       });
       const element = container.firstChild as HTMLElement;
@@ -134,7 +151,12 @@ describe('Text', () => {
 
     it('custom styles override Text props', () => {
       m.mount(container, {
-        view: () => m(Text, { fontSize: '1rem', style: { fontSize: '2rem' } }, 'Override'),
+        view: () =>
+          m(
+            Text,
+            { fontSize: '1rem', style: { fontSize: '2rem' } },
+            'Override',
+          ),
       });
       const element = container.firstChild as HTMLElement;
       expect(element.style.fontSize).toBe('2rem');
@@ -200,7 +222,9 @@ describe('Heading', () => {
     });
 
     it('renders custom element when "as" prop is provided', () => {
-      m.mount(container, { view: () => m(Heading, { as: 'div', level: 1 }, 'Div heading') });
+      m.mount(container, {
+        view: () => m(Heading, { as: 'div', level: 1 }, 'Div heading'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.tagName).toBe('DIV');
     });
@@ -208,7 +232,11 @@ describe('Heading', () => {
     it('forwards HTML attributes', () => {
       m.mount(container, {
         view: () =>
-          m(Heading, { id: 'custom-id', class: 'custom-class', level: 1 }, 'Heading'),
+          m(
+            Heading,
+            { id: 'custom-id', class: 'custom-class', level: 1 },
+            'Heading',
+          ),
       });
       const element = container.firstChild as HTMLElement;
       expect(element.getAttribute('id')).toBe('custom-id');
@@ -276,13 +304,17 @@ describe('Heading', () => {
 
   describe('fontSize prop override (design tokens)', () => {
     it('custom fontSize overrides level-based fontSize', () => {
-      m.mount(container, { view: () => m(Heading, { level: 1, fontSize: '3rem' }, 'Custom') });
+      m.mount(container, {
+        view: () => m(Heading, { level: 1, fontSize: '3rem' }, 'Custom'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.fontSize).toBe('3rem');
     });
 
     it('applies custom fontSize with any level', () => {
-      m.mount(container, { view: () => m(Heading, { level: 4, fontSize: '2rem' }, 'Custom') });
+      m.mount(container, {
+        view: () => m(Heading, { level: 4, fontSize: '2rem' }, 'Custom'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.fontSize).toBe('2rem');
     });
@@ -290,7 +322,9 @@ describe('Heading', () => {
 
   describe('fontWeight prop (design tokens)', () => {
     it('applies custom fontWeight', () => {
-      m.mount(container, { view: () => m(Heading, { fontWeight: 800 }, 'Extra bold') });
+      m.mount(container, {
+        view: () => m(Heading, { fontWeight: 800 }, 'Extra bold'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.fontWeight).toBe('800');
     });
@@ -299,7 +333,9 @@ describe('Heading', () => {
       const weights = [400, 500, 600, 700, 800];
 
       weights.forEach((weight) => {
-        m.mount(container, { view: () => m(Heading, { fontWeight: weight }, 'Heading') });
+        m.mount(container, {
+          view: () => m(Heading, { fontWeight: weight }, 'Heading'),
+        });
         const element = container.firstChild as HTMLElement;
         expect(element.style.fontWeight).toBe(String(weight));
         m.mount(container, null);
@@ -307,7 +343,9 @@ describe('Heading', () => {
     });
 
     it('applies string fontWeight', () => {
-      m.mount(container, { view: () => m(Heading, { fontWeight: 'normal' }, 'Normal') });
+      m.mount(container, {
+        view: () => m(Heading, { fontWeight: 'normal' }, 'Normal'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.fontWeight).toBe('normal');
     });
@@ -317,7 +355,11 @@ describe('Heading', () => {
     it('combines level, custom fontSize, and fontWeight', () => {
       m.mount(container, {
         view: () =>
-          m(Heading, { level: 1, fontSize: '4rem', fontWeight: 900 }, 'Custom heading'),
+          m(
+            Heading,
+            { level: 1, fontSize: '4rem', fontWeight: 900 },
+            'Custom heading',
+          ),
       });
       const element = container.firstChild as HTMLElement;
       expect(element.style.fontSize).toBe('4rem');
@@ -325,7 +367,9 @@ describe('Heading', () => {
     });
 
     it('combines level and fontWeight with default fontSize', () => {
-      m.mount(container, { view: () => m(Heading, { level: 3, fontWeight: 600 }, 'Heading') });
+      m.mount(container, {
+        view: () => m(Heading, { level: 3, fontWeight: 600 }, 'Heading'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.fontSize).toBe('1.5rem');
       expect(element.style.fontWeight).toBe('600');
@@ -339,7 +383,7 @@ describe('Heading', () => {
           m(
             Heading,
             { level: 2, style: { color: 'blue', textAlign: 'center' } },
-            'Styled heading'
+            'Styled heading',
           ),
       });
       const element = container.firstChild as HTMLElement;
@@ -354,8 +398,12 @@ describe('Heading', () => {
         view: () =>
           m(
             Heading,
-            { level: 1, fontWeight: 700, style: { fontSize: '5rem', fontWeight: 400 } },
-            'Override'
+            {
+              level: 1,
+              fontWeight: 700,
+              style: { fontSize: '5rem', fontWeight: 400 },
+            },
+            'Override',
           ),
       });
       const element = container.firstChild as HTMLElement;

@@ -31,7 +31,8 @@ describe('Box', () => {
 
     it('forwards HTML attributes', () => {
       m.mount(container, {
-        view: () => m(Box, { id: 'custom-id', class: 'custom-class' }, 'Content'),
+        view: () =>
+          m(Box, { id: 'custom-id', class: 'custom-class' }, 'Content'),
       });
       const element = container.firstChild as HTMLElement;
       expect(element.getAttribute('id')).toBe('custom-id');
@@ -166,13 +167,17 @@ describe('Box', () => {
     });
 
     it('applies color (text color)', () => {
-      m.mount(container, { view: () => m(Box, { color: '#ffffff' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Box, { color: '#ffffff' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.color).toBe('rgb(255, 255, 255)');
     });
 
     it('applies both bg and color together', () => {
-      m.mount(container, { view: () => m(Box, { bg: '#4a5568', color: '#ffffff' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Box, { bg: '#4a5568', color: '#ffffff' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.backgroundColor).toBe('rgb(74, 85, 104)');
       expect(element.style.color).toBe('rgb(255, 255, 255)');
@@ -187,7 +192,9 @@ describe('Box', () => {
     });
 
     it('applies string rounded value directly', () => {
-      m.mount(container, { view: () => m(Box, { rounded: '0.375rem' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Box, { rounded: '0.375rem' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.borderRadius).toBe('0.375rem');
     });
@@ -210,7 +217,7 @@ describe('Box', () => {
               bg: '#3182ce',
               style: { border: '1px solid black', display: 'flex' },
             },
-            'Content'
+            'Content',
           ),
       });
       const element = container.firstChild as HTMLElement;
@@ -229,7 +236,7 @@ describe('Box', () => {
               p: 4,
               style: { padding: '100px' },
             },
-            'Content'
+            'Content',
           ),
       });
       const element = container.firstChild as HTMLElement;

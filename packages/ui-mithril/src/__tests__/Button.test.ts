@@ -26,7 +26,11 @@ describe('Button', () => {
     it('forwards HTML button attributes', () => {
       m.mount(container, {
         view: () =>
-          m(Button, { id: 'custom-id', class: 'custom-class', disabled: true }, 'Click me'),
+          m(
+            Button,
+            { id: 'custom-id', class: 'custom-class', disabled: true },
+            'Click me',
+          ),
       });
       const element = container.firstChild as HTMLButtonElement;
       expect(element.getAttribute('id')).toBe('custom-id');
@@ -45,7 +49,7 @@ describe('Button', () => {
                 clicked = true;
               },
             },
-            'Click me'
+            'Click me',
           ),
       });
       const element = container.firstChild as HTMLButtonElement;
@@ -105,7 +109,9 @@ describe('Button', () => {
 
   describe('variant prop (design tokens)', () => {
     it('applies solid variant (default) with background color', () => {
-      m.mount(container, { view: () => m(Button, { variant: 'solid' }, 'Solid') });
+      m.mount(container, {
+        view: () => m(Button, { variant: 'solid' }, 'Solid'),
+      });
       const element = container.firstChild as HTMLElement;
 
       expect(element.style.backgroundColor).toBe('rgb(49, 130, 206)'); // default blue
@@ -122,7 +128,9 @@ describe('Button', () => {
     });
 
     it('applies outline variant with border color', () => {
-      m.mount(container, { view: () => m(Button, { variant: 'outline' }, 'Outline') });
+      m.mount(container, {
+        view: () => m(Button, { variant: 'outline' }, 'Outline'),
+      });
       const element = container.firstChild as HTMLElement;
 
       expect(element.style.borderColor).toBe('rgb(49, 130, 206)'); // default blue
@@ -131,7 +139,9 @@ describe('Button', () => {
     });
 
     it('applies ghost variant with no border or background', () => {
-      m.mount(container, { view: () => m(Button, { variant: 'ghost' }, 'Ghost') });
+      m.mount(container, {
+        view: () => m(Button, { variant: 'ghost' }, 'Ghost'),
+      });
       const element = container.firstChild as HTMLElement;
 
       expect(element.style.color).toBe('rgb(49, 130, 206)'); // default blue
@@ -144,7 +154,8 @@ describe('Button', () => {
     describe('solid variant', () => {
       it('applies blue color scheme (default)', () => {
         m.mount(container, {
-          view: () => m(Button, { variant: 'solid', colorScheme: 'blue' }, 'Blue'),
+          view: () =>
+            m(Button, { variant: 'solid', colorScheme: 'blue' }, 'Blue'),
         });
         const element = container.firstChild as HTMLElement;
 
@@ -153,7 +164,9 @@ describe('Button', () => {
       });
 
       it('defaults to blue color scheme when no colorScheme provided', () => {
-        m.mount(container, { view: () => m(Button, { variant: 'solid' }, 'Default') });
+        m.mount(container, {
+          view: () => m(Button, { variant: 'solid' }, 'Default'),
+        });
         const element = container.firstChild as HTMLElement;
 
         expect(element.style.backgroundColor).toBe('rgb(49, 130, 206)');
@@ -162,7 +175,8 @@ describe('Button', () => {
 
       it('applies gray color scheme', () => {
         m.mount(container, {
-          view: () => m(Button, { variant: 'solid', colorScheme: 'gray' }, 'Gray'),
+          view: () =>
+            m(Button, { variant: 'solid', colorScheme: 'gray' }, 'Gray'),
         });
         const element = container.firstChild as HTMLElement;
 
@@ -172,7 +186,8 @@ describe('Button', () => {
 
       it('applies red color scheme', () => {
         m.mount(container, {
-          view: () => m(Button, { variant: 'solid', colorScheme: 'red' }, 'Red'),
+          view: () =>
+            m(Button, { variant: 'solid', colorScheme: 'red' }, 'Red'),
         });
         const element = container.firstChild as HTMLElement;
 
@@ -182,7 +197,8 @@ describe('Button', () => {
 
       it('applies green color scheme', () => {
         m.mount(container, {
-          view: () => m(Button, { variant: 'solid', colorScheme: 'green' }, 'Green'),
+          view: () =>
+            m(Button, { variant: 'solid', colorScheme: 'green' }, 'Green'),
         });
         const element = container.firstChild as HTMLElement;
 
@@ -194,7 +210,8 @@ describe('Button', () => {
     describe('outline variant', () => {
       it('applies blue color scheme', () => {
         m.mount(container, {
-          view: () => m(Button, { variant: 'outline', colorScheme: 'blue' }, 'Blue'),
+          view: () =>
+            m(Button, { variant: 'outline', colorScheme: 'blue' }, 'Blue'),
         });
         const element = container.firstChild as HTMLElement;
 
@@ -205,7 +222,8 @@ describe('Button', () => {
 
       it('applies gray color scheme', () => {
         m.mount(container, {
-          view: () => m(Button, { variant: 'outline', colorScheme: 'gray' }, 'Gray'),
+          view: () =>
+            m(Button, { variant: 'outline', colorScheme: 'gray' }, 'Gray'),
         });
         const element = container.firstChild as HTMLElement;
 
@@ -216,7 +234,8 @@ describe('Button', () => {
 
       it('applies red color scheme', () => {
         m.mount(container, {
-          view: () => m(Button, { variant: 'outline', colorScheme: 'red' }, 'Red'),
+          view: () =>
+            m(Button, { variant: 'outline', colorScheme: 'red' }, 'Red'),
         });
         const element = container.firstChild as HTMLElement;
 
@@ -227,7 +246,8 @@ describe('Button', () => {
 
       it('applies green color scheme', () => {
         m.mount(container, {
-          view: () => m(Button, { variant: 'outline', colorScheme: 'green' }, 'Green'),
+          view: () =>
+            m(Button, { variant: 'outline', colorScheme: 'green' }, 'Green'),
         });
         const element = container.firstChild as HTMLElement;
 
@@ -240,7 +260,8 @@ describe('Button', () => {
     describe('ghost variant', () => {
       it('applies blue color scheme', () => {
         m.mount(container, {
-          view: () => m(Button, { variant: 'ghost', colorScheme: 'blue' }, 'Blue'),
+          view: () =>
+            m(Button, { variant: 'ghost', colorScheme: 'blue' }, 'Blue'),
         });
         const element = container.firstChild as HTMLElement;
 
@@ -250,7 +271,8 @@ describe('Button', () => {
 
       it('applies gray color scheme', () => {
         m.mount(container, {
-          view: () => m(Button, { variant: 'ghost', colorScheme: 'gray' }, 'Gray'),
+          view: () =>
+            m(Button, { variant: 'ghost', colorScheme: 'gray' }, 'Gray'),
         });
         const element = container.firstChild as HTMLElement;
 
@@ -260,7 +282,8 @@ describe('Button', () => {
 
       it('applies red color scheme', () => {
         m.mount(container, {
-          view: () => m(Button, { variant: 'ghost', colorScheme: 'red' }, 'Red'),
+          view: () =>
+            m(Button, { variant: 'ghost', colorScheme: 'red' }, 'Red'),
         });
         const element = container.firstChild as HTMLElement;
 
@@ -270,7 +293,8 @@ describe('Button', () => {
 
       it('applies green color scheme', () => {
         m.mount(container, {
-          view: () => m(Button, { variant: 'ghost', colorScheme: 'green' }, 'Green'),
+          view: () =>
+            m(Button, { variant: 'ghost', colorScheme: 'green' }, 'Green'),
         });
         const element = container.firstChild as HTMLElement;
 
@@ -283,7 +307,8 @@ describe('Button', () => {
   describe('combined props (design token combinations)', () => {
     it('combines size and variant props', () => {
       m.mount(container, {
-        view: () => m(Button, { size: 'lg', variant: 'outline' }, 'Large Outline'),
+        view: () =>
+          m(Button, { size: 'lg', variant: 'outline' }, 'Large Outline'),
       });
       const element = container.firstChild as HTMLElement;
 
@@ -296,7 +321,11 @@ describe('Button', () => {
     it('combines size, variant, and colorScheme props', () => {
       m.mount(container, {
         view: () =>
-          m(Button, { size: 'sm', variant: 'solid', colorScheme: 'red' }, 'Small Red Solid'),
+          m(
+            Button,
+            { size: 'sm', variant: 'solid', colorScheme: 'red' },
+            'Small Red Solid',
+          ),
       });
       const element = container.firstChild as HTMLElement;
 
@@ -317,7 +346,7 @@ describe('Button', () => {
               variant: 'solid',
               style: { border: '2px dashed red', textTransform: 'uppercase' },
             },
-            'Custom'
+            'Custom',
           ),
       });
       const element = container.firstChild as HTMLElement;
@@ -338,7 +367,7 @@ describe('Button', () => {
               colorScheme: 'blue',
               style: { backgroundColor: 'purple' },
             },
-            'Custom Color'
+            'Custom Color',
           ),
       });
       const element = container.firstChild as HTMLElement;
@@ -364,7 +393,11 @@ describe('Button', () => {
     });
 
     it('applies consistent border radius across all variants', () => {
-      const variants: Array<'solid' | 'outline' | 'ghost'> = ['solid', 'outline', 'ghost'];
+      const variants: Array<'solid' | 'outline' | 'ghost'> = [
+        'solid',
+        'outline',
+        'ghost',
+      ];
 
       variants.forEach((variant) => {
         m.mount(container, { view: () => m(Button, { variant }, 'Test') });

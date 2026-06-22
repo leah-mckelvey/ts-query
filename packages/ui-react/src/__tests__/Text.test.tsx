@@ -13,13 +13,21 @@ describe('Text', () => {
     });
 
     it('renders custom element when "as" prop is provided', () => {
-      render(<Text as="span" data-testid="text">Text content</Text>);
+      render(
+        <Text as="span" data-testid="text">
+          Text content
+        </Text>,
+      );
       const element = screen.getByTestId('text');
       expect(element.tagName).toBe('SPAN');
     });
 
     it('can render as a div', () => {
-      render(<Text as="div" data-testid="text">Text content</Text>);
+      render(
+        <Text as="div" data-testid="text">
+          Text content
+        </Text>,
+      );
       const element = screen.getByTestId('text');
       expect(element.tagName).toBe('DIV');
     });
@@ -28,7 +36,7 @@ describe('Text', () => {
       render(
         <Text data-testid="text" id="custom-id" className="custom-class">
           Text content
-        </Text>
+        </Text>,
       );
       const element = screen.getByTestId('text');
       expect(element).toHaveAttribute('id', 'custom-id');
@@ -46,13 +54,21 @@ describe('Text', () => {
 
   describe('fontSize prop (design tokens)', () => {
     it('applies custom fontSize', () => {
-      render(<Text data-testid="text" fontSize="1.5rem">Large text</Text>);
+      render(
+        <Text data-testid="text" fontSize="1.5rem">
+          Large text
+        </Text>,
+      );
       const element = screen.getByTestId('text');
       expect(element).toHaveStyle({ fontSize: '1.5rem' });
     });
 
     it('applies fontSize in pixels', () => {
-      render(<Text data-testid="text" fontSize="18px">Text</Text>);
+      render(
+        <Text data-testid="text" fontSize="18px">
+          Text
+        </Text>,
+      );
       const element = screen.getByTestId('text');
       expect(element).toHaveStyle({ fontSize: '18px' });
     });
@@ -67,13 +83,21 @@ describe('Text', () => {
 
   describe('fontWeight prop (design tokens)', () => {
     it('applies numeric fontWeight', () => {
-      render(<Text data-testid="text" fontWeight={700}>Bold text</Text>);
+      render(
+        <Text data-testid="text" fontWeight={700}>
+          Bold text
+        </Text>,
+      );
       const element = screen.getByTestId('text');
       expect(element).toHaveStyle({ fontWeight: '700' });
     });
 
     it('applies string fontWeight', () => {
-      render(<Text data-testid="text" fontWeight="bold">Bold text</Text>);
+      render(
+        <Text data-testid="text" fontWeight="bold">
+          Bold text
+        </Text>,
+      );
       const element = screen.getByTestId('text');
       expect(element).toHaveStyle({ fontWeight: 'bold' });
     });
@@ -82,7 +106,11 @@ describe('Text', () => {
       const weights = [300, 400, 500, 600, 700, 800];
 
       weights.forEach((weight) => {
-        const { unmount } = render(<Text data-testid="text" fontWeight={weight}>Text</Text>);
+        const { unmount } = render(
+          <Text data-testid="text" fontWeight={weight}>
+            Text
+          </Text>,
+        );
         const element = screen.getByTestId('text');
         expect(element).toHaveStyle({ fontWeight: String(weight) });
         unmount();
@@ -101,7 +129,7 @@ describe('Text', () => {
       render(
         <Text data-testid="text" fontSize="1.5rem" fontWeight={600}>
           Styled text
-        </Text>
+        </Text>,
       );
       const element = screen.getByTestId('text');
       expect(element).toHaveStyle({
@@ -120,7 +148,7 @@ describe('Text', () => {
           style={{ color: 'red', textAlign: 'center' }}
         >
           Custom styled
-        </Text>
+        </Text>,
       );
       const element = screen.getByTestId('text');
       expect(element).toHaveStyle({
@@ -134,7 +162,7 @@ describe('Text', () => {
       render(
         <Text data-testid="text" fontSize="1rem" style={{ fontSize: '2rem' }}>
           Override
-        </Text>
+        </Text>,
       );
       const element = screen.getByTestId('text');
       expect(element).toHaveStyle({ fontSize: '2rem' });
@@ -152,52 +180,85 @@ describe('Heading', () => {
     });
 
     it('renders h1 when level is 1', () => {
-      render(<Heading data-testid="heading" level={1}>Heading 1</Heading>);
+      render(
+        <Heading data-testid="heading" level={1}>
+          Heading 1
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element.tagName).toBe('H1');
     });
 
     it('renders h2 when level is 2', () => {
-      render(<Heading data-testid="heading" level={2}>Heading 2</Heading>);
+      render(
+        <Heading data-testid="heading" level={2}>
+          Heading 2
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element.tagName).toBe('H2');
     });
 
     it('renders h3 when level is 3', () => {
-      render(<Heading data-testid="heading" level={3}>Heading 3</Heading>);
+      render(
+        <Heading data-testid="heading" level={3}>
+          Heading 3
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element.tagName).toBe('H3');
     });
 
     it('renders h4 when level is 4', () => {
-      render(<Heading data-testid="heading" level={4}>Heading 4</Heading>);
+      render(
+        <Heading data-testid="heading" level={4}>
+          Heading 4
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element.tagName).toBe('H4');
     });
 
     it('renders h5 when level is 5', () => {
-      render(<Heading data-testid="heading" level={5}>Heading 5</Heading>);
+      render(
+        <Heading data-testid="heading" level={5}>
+          Heading 5
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element.tagName).toBe('H5');
     });
 
     it('renders h6 when level is 6', () => {
-      render(<Heading data-testid="heading" level={6}>Heading 6</Heading>);
+      render(
+        <Heading data-testid="heading" level={6}>
+          Heading 6
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element.tagName).toBe('H6');
     });
 
     it('renders custom element when "as" prop is provided', () => {
-      render(<Heading as="div" data-testid="heading" level={1}>Div heading</Heading>);
+      render(
+        <Heading as="div" data-testid="heading" level={1}>
+          Div heading
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element.tagName).toBe('DIV');
     });
 
     it('forwards HTML attributes', () => {
       render(
-        <Heading data-testid="heading" id="custom-id" className="custom-class" level={1}>
+        <Heading
+          data-testid="heading"
+          id="custom-id"
+          className="custom-class"
+          level={1}
+        >
           Heading
-        </Heading>
+        </Heading>,
       );
       const element = screen.getByTestId('heading');
       expect(element).toHaveAttribute('id', 'custom-id');
@@ -221,37 +282,61 @@ describe('Heading', () => {
 
   describe('level-based fontSize (design tokens)', () => {
     it('applies correct fontSize for level 1', () => {
-      render(<Heading data-testid="heading" level={1}>H1</Heading>);
+      render(
+        <Heading data-testid="heading" level={1}>
+          H1
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({ fontSize: '2.25rem' });
     });
 
     it('applies correct fontSize for level 2', () => {
-      render(<Heading data-testid="heading" level={2}>H2</Heading>);
+      render(
+        <Heading data-testid="heading" level={2}>
+          H2
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({ fontSize: '1.875rem' });
     });
 
     it('applies correct fontSize for level 3', () => {
-      render(<Heading data-testid="heading" level={3}>H3</Heading>);
+      render(
+        <Heading data-testid="heading" level={3}>
+          H3
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({ fontSize: '1.5rem' });
     });
 
     it('applies correct fontSize for level 4', () => {
-      render(<Heading data-testid="heading" level={4}>H4</Heading>);
+      render(
+        <Heading data-testid="heading" level={4}>
+          H4
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({ fontSize: '1.25rem' });
     });
 
     it('applies correct fontSize for level 5', () => {
-      render(<Heading data-testid="heading" level={5}>H5</Heading>);
+      render(
+        <Heading data-testid="heading" level={5}>
+          H5
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({ fontSize: '1.125rem' });
     });
 
     it('applies correct fontSize for level 6', () => {
-      render(<Heading data-testid="heading" level={6}>H6</Heading>);
+      render(
+        <Heading data-testid="heading" level={6}>
+          H6
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({ fontSize: '1rem' });
     });
@@ -265,13 +350,21 @@ describe('Heading', () => {
 
   describe('fontSize prop override (design tokens)', () => {
     it('custom fontSize overrides level-based fontSize', () => {
-      render(<Heading data-testid="heading" level={1} fontSize="3rem">Custom</Heading>);
+      render(
+        <Heading data-testid="heading" level={1} fontSize="3rem">
+          Custom
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({ fontSize: '3rem' });
     });
 
     it('applies custom fontSize with any level', () => {
-      render(<Heading data-testid="heading" level={4} fontSize="2rem">Custom</Heading>);
+      render(
+        <Heading data-testid="heading" level={4} fontSize="2rem">
+          Custom
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({ fontSize: '2rem' });
     });
@@ -279,7 +372,11 @@ describe('Heading', () => {
 
   describe('fontWeight prop (design tokens)', () => {
     it('applies custom fontWeight', () => {
-      render(<Heading data-testid="heading" fontWeight={800}>Extra bold</Heading>);
+      render(
+        <Heading data-testid="heading" fontWeight={800}>
+          Extra bold
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({ fontWeight: '800' });
     });
@@ -289,7 +386,9 @@ describe('Heading', () => {
 
       weights.forEach((weight) => {
         const { unmount } = render(
-          <Heading data-testid="heading" fontWeight={weight}>Heading</Heading>
+          <Heading data-testid="heading" fontWeight={weight}>
+            Heading
+          </Heading>,
         );
         const element = screen.getByTestId('heading');
         expect(element).toHaveStyle({ fontWeight: String(weight) });
@@ -298,7 +397,11 @@ describe('Heading', () => {
     });
 
     it('applies string fontWeight', () => {
-      render(<Heading data-testid="heading" fontWeight="normal">Normal</Heading>);
+      render(
+        <Heading data-testid="heading" fontWeight="normal">
+          Normal
+        </Heading>,
+      );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({ fontWeight: 'normal' });
     });
@@ -307,9 +410,14 @@ describe('Heading', () => {
   describe('combined props (design token combinations)', () => {
     it('combines level, custom fontSize, and fontWeight', () => {
       render(
-        <Heading data-testid="heading" level={1} fontSize="4rem" fontWeight={900}>
+        <Heading
+          data-testid="heading"
+          level={1}
+          fontSize="4rem"
+          fontWeight={900}
+        >
           Custom heading
-        </Heading>
+        </Heading>,
       );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({
@@ -322,7 +430,7 @@ describe('Heading', () => {
       render(
         <Heading data-testid="heading" level={3} fontWeight={600}>
           Heading
-        </Heading>
+        </Heading>,
       );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({
@@ -341,7 +449,7 @@ describe('Heading', () => {
           style={{ color: 'blue', textAlign: 'center' }}
         >
           Styled heading
-        </Heading>
+        </Heading>,
       );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({
@@ -361,7 +469,7 @@ describe('Heading', () => {
           style={{ fontSize: '5rem', fontWeight: 400 }}
         >
           Override
-        </Heading>
+        </Heading>,
       );
       const element = screen.getByTestId('heading');
       expect(element).toHaveStyle({
@@ -378,7 +486,7 @@ describe('Heading', () => {
           <Heading level={1}>Main Title</Heading>
           <Heading level={2}>Section</Heading>
           <Heading level={3}>Subsection</Heading>
-        </div>
+        </div>,
       );
 
       expect(container.querySelector('h1')).toHaveTextContent('Main Title');
@@ -399,7 +507,11 @@ describe('Heading', () => {
       ] as const;
 
       levels.forEach(({ level, fontSize }) => {
-        const { unmount } = render(<Heading data-testid="heading" level={level}>H{level}</Heading>);
+        const { unmount } = render(
+          <Heading data-testid="heading" level={level}>
+            H{level}
+          </Heading>,
+        );
         const element = screen.getByTestId('heading');
         expect(element).toHaveStyle({ fontSize });
         unmount();
@@ -410,7 +522,11 @@ describe('Heading', () => {
       const levels = [1, 2, 3, 4, 5, 6] as const;
 
       levels.forEach((level) => {
-        const { unmount } = render(<Heading data-testid="heading" level={level}>H{level}</Heading>);
+        const { unmount } = render(
+          <Heading data-testid="heading" level={level}>
+            H{level}
+          </Heading>,
+        );
         const element = screen.getByTestId('heading');
         expect(element).toHaveStyle({ fontWeight: '700' });
         unmount();

@@ -25,7 +25,8 @@ describe('Stack', () => {
 
     it('forwards HTML attributes', () => {
       m.mount(container, {
-        view: () => m(Stack, { id: 'custom-id', class: 'custom-class' }, 'Content'),
+        view: () =>
+          m(Stack, { id: 'custom-id', class: 'custom-class' }, 'Content'),
       });
       const element = container.firstChild as HTMLElement;
       expect(element.getAttribute('id')).toBe('custom-id');
@@ -35,7 +36,11 @@ describe('Stack', () => {
     it('renders children', () => {
       m.mount(container, {
         view: () =>
-          m(Stack, [m('div', 'Child 1'), m('div', 'Child 2'), m('div', 'Child 3')]),
+          m(Stack, [
+            m('div', 'Child 1'),
+            m('div', 'Child 2'),
+            m('div', 'Child 3'),
+          ]),
       });
       const element = container.firstChild as HTMLElement;
       expect(element.textContent).toContain('Child 1');
@@ -60,13 +65,17 @@ describe('Stack', () => {
     });
 
     it('applies column direction', () => {
-      m.mount(container, { view: () => m(Stack, { direction: 'column' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { direction: 'column' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.flexDirection).toBe('column');
     });
 
     it('applies row direction', () => {
-      m.mount(container, { view: () => m(Stack, { direction: 'row' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { direction: 'row' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.flexDirection).toBe('row');
     });
@@ -119,31 +128,41 @@ describe('Stack', () => {
 
   describe('align prop (design tokens)', () => {
     it('applies align-items: center', () => {
-      m.mount(container, { view: () => m(Stack, { align: 'center' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { align: 'center' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.alignItems).toBe('center');
     });
 
     it('applies align-items: flex-start', () => {
-      m.mount(container, { view: () => m(Stack, { align: 'flex-start' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { align: 'flex-start' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.alignItems).toBe('flex-start');
     });
 
     it('applies align-items: flex-end', () => {
-      m.mount(container, { view: () => m(Stack, { align: 'flex-end' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { align: 'flex-end' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.alignItems).toBe('flex-end');
     });
 
     it('applies align-items: stretch', () => {
-      m.mount(container, { view: () => m(Stack, { align: 'stretch' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { align: 'stretch' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.alignItems).toBe('stretch');
     });
 
     it('applies align-items: baseline', () => {
-      m.mount(container, { view: () => m(Stack, { align: 'baseline' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { align: 'baseline' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.alignItems).toBe('baseline');
     });
@@ -151,37 +170,49 @@ describe('Stack', () => {
 
   describe('justify prop (design tokens)', () => {
     it('applies justify-content: center', () => {
-      m.mount(container, { view: () => m(Stack, { justify: 'center' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { justify: 'center' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.justifyContent).toBe('center');
     });
 
     it('applies justify-content: flex-start', () => {
-      m.mount(container, { view: () => m(Stack, { justify: 'flex-start' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { justify: 'flex-start' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.justifyContent).toBe('flex-start');
     });
 
     it('applies justify-content: flex-end', () => {
-      m.mount(container, { view: () => m(Stack, { justify: 'flex-end' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { justify: 'flex-end' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.justifyContent).toBe('flex-end');
     });
 
     it('applies justify-content: space-between', () => {
-      m.mount(container, { view: () => m(Stack, { justify: 'space-between' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { justify: 'space-between' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.justifyContent).toBe('space-between');
     });
 
     it('applies justify-content: space-around', () => {
-      m.mount(container, { view: () => m(Stack, { justify: 'space-around' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { justify: 'space-around' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.justifyContent).toBe('space-around');
     });
 
     it('applies justify-content: space-evenly', () => {
-      m.mount(container, { view: () => m(Stack, { justify: 'space-evenly' }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { justify: 'space-evenly' }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.justifyContent).toBe('space-evenly');
     });
@@ -189,7 +220,9 @@ describe('Stack', () => {
 
   describe('combined props (design token combinations)', () => {
     it('combines direction and gap', () => {
-      m.mount(container, { view: () => m(Stack, { direction: 'row', gap: 4 }, 'Content') });
+      m.mount(container, {
+        view: () => m(Stack, { direction: 'row', gap: 4 }, 'Content'),
+      });
       const element = container.firstChild as HTMLElement;
       expect(element.style.flexDirection).toBe('row');
       expect(element.style.gap).toBe('16px');
@@ -200,8 +233,13 @@ describe('Stack', () => {
         view: () =>
           m(
             Stack,
-            { direction: 'row', gap: 2, align: 'center', justify: 'space-between' },
-            'Content'
+            {
+              direction: 'row',
+              gap: 2,
+              align: 'center',
+              justify: 'space-between',
+            },
+            'Content',
           ),
       });
       const element = container.firstChild as HTMLElement;
@@ -213,7 +251,8 @@ describe('Stack', () => {
 
     it('column direction with center alignment', () => {
       m.mount(container, {
-        view: () => m(Stack, { direction: 'column', gap: 3, align: 'center' }, 'Content'),
+        view: () =>
+          m(Stack, { direction: 'column', gap: 3, align: 'center' }, 'Content'),
       });
       const element = container.firstChild as HTMLElement;
       expect(element.style.flexDirection).toBe('column');
@@ -233,7 +272,7 @@ describe('Stack', () => {
               gap: 4,
               style: { border: '1px solid black', padding: '10px' },
             },
-            'Content'
+            'Content',
           ),
       });
       const element = container.firstChild as HTMLElement;
@@ -246,7 +285,11 @@ describe('Stack', () => {
     it('custom styles override Stack props', () => {
       m.mount(container, {
         view: () =>
-          m(Stack, { direction: 'row', style: { flexDirection: 'column-reverse' } }, 'Content'),
+          m(
+            Stack,
+            { direction: 'row', style: { flexDirection: 'column-reverse' } },
+            'Content',
+          ),
       });
       const element = container.firstChild as HTMLElement;
       // Custom style should override

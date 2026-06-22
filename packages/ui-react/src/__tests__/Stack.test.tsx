@@ -16,7 +16,7 @@ describe('Stack', () => {
       render(
         <Stack data-testid="stack" id="custom-id" className="custom-class">
           Content
-        </Stack>
+        </Stack>,
       );
       const element = screen.getByTestId('stack');
       expect(element).toHaveAttribute('id', 'custom-id');
@@ -29,7 +29,7 @@ describe('Stack', () => {
           <div>Child 1</div>
           <div>Child 2</div>
           <div>Child 3</div>
-        </Stack>
+        </Stack>,
       );
       const element = screen.getByTestId('stack');
       expect(element).toHaveTextContent('Child 1');
@@ -54,13 +54,21 @@ describe('Stack', () => {
     });
 
     it('applies column direction', () => {
-      render(<Stack data-testid="stack" direction="column">Content</Stack>);
+      render(
+        <Stack data-testid="stack" direction="column">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ flexDirection: 'column' });
     });
 
     it('applies row direction', () => {
-      render(<Stack data-testid="stack" direction="row">Content</Stack>);
+      render(
+        <Stack data-testid="stack" direction="row">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ flexDirection: 'row' });
     });
@@ -68,7 +76,11 @@ describe('Stack', () => {
 
   describe('gap prop (design tokens)', () => {
     it('applies numeric gap with 4px base unit', () => {
-      render(<Stack data-testid="stack" gap={4}>Content</Stack>);
+      render(
+        <Stack data-testid="stack" gap={4}>
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ gap: '16px' });
     });
@@ -84,7 +96,11 @@ describe('Stack', () => {
       ];
 
       testCases.forEach(({ value, expected }) => {
-        const { unmount } = render(<Stack data-testid="stack" gap={value}>Content</Stack>);
+        const { unmount } = render(
+          <Stack data-testid="stack" gap={value}>
+            Content
+          </Stack>,
+        );
         const element = screen.getByTestId('stack');
         expect(element).toHaveStyle({ gap: expected });
         unmount();
@@ -92,7 +108,11 @@ describe('Stack', () => {
     });
 
     it('applies string gap values directly', () => {
-      render(<Stack data-testid="stack" gap="2rem">Content</Stack>);
+      render(
+        <Stack data-testid="stack" gap="2rem">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ gap: '2rem' });
     });
@@ -105,7 +125,11 @@ describe('Stack', () => {
     });
 
     it('applies gap of 0', () => {
-      render(<Stack data-testid="stack" gap={0}>Content</Stack>);
+      render(
+        <Stack data-testid="stack" gap={0}>
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ gap: '0px' });
     });
@@ -113,31 +137,51 @@ describe('Stack', () => {
 
   describe('align prop (design tokens)', () => {
     it('applies align-items: center', () => {
-      render(<Stack data-testid="stack" align="center">Content</Stack>);
+      render(
+        <Stack data-testid="stack" align="center">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ alignItems: 'center' });
     });
 
     it('applies align-items: flex-start', () => {
-      render(<Stack data-testid="stack" align="flex-start">Content</Stack>);
+      render(
+        <Stack data-testid="stack" align="flex-start">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ alignItems: 'flex-start' });
     });
 
     it('applies align-items: flex-end', () => {
-      render(<Stack data-testid="stack" align="flex-end">Content</Stack>);
+      render(
+        <Stack data-testid="stack" align="flex-end">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ alignItems: 'flex-end' });
     });
 
     it('applies align-items: stretch', () => {
-      render(<Stack data-testid="stack" align="stretch">Content</Stack>);
+      render(
+        <Stack data-testid="stack" align="stretch">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ alignItems: 'stretch' });
     });
 
     it('applies align-items: baseline', () => {
-      render(<Stack data-testid="stack" align="baseline">Content</Stack>);
+      render(
+        <Stack data-testid="stack" align="baseline">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ alignItems: 'baseline' });
     });
@@ -145,37 +189,61 @@ describe('Stack', () => {
 
   describe('justify prop (design tokens)', () => {
     it('applies justify-content: center', () => {
-      render(<Stack data-testid="stack" justify="center">Content</Stack>);
+      render(
+        <Stack data-testid="stack" justify="center">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ justifyContent: 'center' });
     });
 
     it('applies justify-content: flex-start', () => {
-      render(<Stack data-testid="stack" justify="flex-start">Content</Stack>);
+      render(
+        <Stack data-testid="stack" justify="flex-start">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ justifyContent: 'flex-start' });
     });
 
     it('applies justify-content: flex-end', () => {
-      render(<Stack data-testid="stack" justify="flex-end">Content</Stack>);
+      render(
+        <Stack data-testid="stack" justify="flex-end">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ justifyContent: 'flex-end' });
     });
 
     it('applies justify-content: space-between', () => {
-      render(<Stack data-testid="stack" justify="space-between">Content</Stack>);
+      render(
+        <Stack data-testid="stack" justify="space-between">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ justifyContent: 'space-between' });
     });
 
     it('applies justify-content: space-around', () => {
-      render(<Stack data-testid="stack" justify="space-around">Content</Stack>);
+      render(
+        <Stack data-testid="stack" justify="space-around">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ justifyContent: 'space-around' });
     });
 
     it('applies justify-content: space-evenly', () => {
-      render(<Stack data-testid="stack" justify="space-evenly">Content</Stack>);
+      render(
+        <Stack data-testid="stack" justify="space-evenly">
+          Content
+        </Stack>,
+      );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({ justifyContent: 'space-evenly' });
     });
@@ -186,7 +254,7 @@ describe('Stack', () => {
       render(
         <Stack data-testid="stack" direction="row" gap={4}>
           Content
-        </Stack>
+        </Stack>,
       );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({
@@ -205,7 +273,7 @@ describe('Stack', () => {
           justify="space-between"
         >
           Content
-        </Stack>
+        </Stack>,
       );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({
@@ -220,7 +288,7 @@ describe('Stack', () => {
       render(
         <Stack data-testid="stack" direction="column" gap={3} align="center">
           Content
-        </Stack>
+        </Stack>,
       );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({
@@ -241,7 +309,7 @@ describe('Stack', () => {
           style={{ border: '1px solid black', padding: '10px' }}
         >
           Content
-        </Stack>
+        </Stack>,
       );
       const element = screen.getByTestId('stack');
       expect(element).toHaveStyle({
@@ -260,7 +328,7 @@ describe('Stack', () => {
           style={{ flexDirection: 'column-reverse' }}
         >
           Content
-        </Stack>
+        </Stack>,
       );
       const element = screen.getByTestId('stack');
       // Custom style should override
@@ -282,7 +350,7 @@ describe('Stack', () => {
       render(
         <Stack data-testid="stack" data-custom="value">
           Content
-        </Stack>
+        </Stack>,
       );
       const element = screen.getByTestId('stack');
       expect(element).toHaveAttribute('data-custom', 'value');
@@ -295,7 +363,7 @@ describe('Stack', () => {
         <Stack data-testid="stack" gap={2}>
           <div data-testid="child-1">Child 1</div>
           <div data-testid="child-2">Child 2</div>
-        </Stack>
+        </Stack>,
       );
       const stack = screen.getByTestId('stack');
 
@@ -311,7 +379,7 @@ describe('Stack', () => {
         <Stack data-testid="stack" direction="row" gap={4}>
           <div data-testid="child-1">Child 1</div>
           <div data-testid="child-2">Child 2</div>
-        </Stack>
+        </Stack>,
       );
       const stack = screen.getByTestId('stack');
 
@@ -331,7 +399,7 @@ describe('Stack', () => {
             <div>Nested 1</div>
             <div>Nested 2</div>
           </Stack>
-        </Stack>
+        </Stack>,
       );
 
       const outer = screen.getByTestId('outer');
@@ -361,7 +429,11 @@ describe('Stack', () => {
       ];
 
       testCases.forEach(({ value, expected }) => {
-        const { unmount } = render(<Stack data-testid="stack" gap={value}>Content</Stack>);
+        const { unmount } = render(
+          <Stack data-testid="stack" gap={value}>
+            Content
+          </Stack>,
+        );
         const element = screen.getByTestId('stack');
         expect(element).toHaveStyle({ gap: expected });
         unmount();
