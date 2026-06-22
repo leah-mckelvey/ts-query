@@ -108,9 +108,33 @@ app.get('/api/users/:id', async (req, res) => {
 ```
 
 **Without observables**: All 10 requests see 'idle', all trigger database query = **10 DB calls**
-**With observables**: First request triggers DB query, other 9 wait on same observable = **1 DB call**
+**With observables (single process)**: First request triggers DB query, other 9 wait on same observable = **1 DB call**
 
-This is the stampeding herd problem - observables solve it at the architectural level.
+This collapses the stampeding herd **within one process** — `currentFetchPromise`
+single-flights all concurrent callers that share the same `Query` instance.
+
+### Measured limit: this does NOT hold across processes
+
+The observable lives in one process's memory. Run the server as a cluster of
+`N` workers (the normal production setup) and each worker has its own
+`QueryClient`, its own `Query`, its own `currentFetchPromise`. On a **cold**
+key, all `N` workers miss the shared L2 cache simultaneously — the L2 write is
+fire-and-forget and hasn't landed yet — and all `N` call the source.
+
+A shared cache is not a shared lock. The measured fan-out (see
+`packages/core/src/__tests__/server-stampede.test.ts`):
+
+| Scenario | Fan-out |
+| --- | --- |
+| 1 process, 50 concurrent (cold) | **1** ✅ |
+| 4 processes, concurrent burst (cold) | **4** ❌ (one DB call per worker) |
+| 4 processes (warm L2) | **1** ✅ |
+
+So per-process coalescing caps fan-out at the **number of workers**, not at 1.
+Driving it to 1 across processes requires distributed single-flight (a Redis
+lease/lock), tracked in issue #28. Until then, the honest claim is: *concurrent
+requests within a worker collapse to one source call; a cold burst across `N`
+workers costs up to `N`.*
 
 ## Trade-off
 
@@ -210,4 +234,4 @@ Callbacks alone can't provide this without introducing race conditions.
 
 ---
 
-**TL;DR**: RxJS fixes a critical race condition in query deduplication by ensuring state changes happen synchronously in the observable stream. This prevents stampeding herd on the backend and duplicate requests on the frontend. The 10KB cost is worth it for production-grade correctness.
+**TL;DR**: RxJS fixes a critical race condition in query deduplication by ensuring state changes happen synchronously in the observable stream. This collapses duplicate requests on the frontend and stampeding herd **within a single server process**. It does **not** prevent stampede across a multi-process cluster on a cold key — that needs distributed single-flight (#28), and the fan-out is measured in `packages/core/src/__tests__/server-stampede.test.ts`. The 10KB cost is worth it for the in-process correctness it does buy.

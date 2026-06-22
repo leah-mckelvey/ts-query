@@ -23,6 +23,23 @@ const CACHE_MISS = Symbol('CACHE_MISS');
 type CacheMiss = typeof CACHE_MISS;
 
 // ##############################
+// Distributed Single-Flight
+// ##############################
+
+/**
+ * How long a single-flight lock is held before it auto-expires. This is the
+ * worst-case time a "loser" process will wait for the winner's value before it
+ * gives up coalescing. It must comfortably exceed a normal queryFn duration; if
+ * a queryFn legitimately runs longer than this, the lock can expire mid-fetch
+ * and a second process may also fetch (fan-out > 1). Tuning / lock-extension is
+ * tracked as a hardening follow-up.
+ */
+const SINGLE_FLIGHT_LOCK_TTL_MS = 10_000;
+
+/** Poll interval while a loser waits for the winner to publish to L2. */
+const SINGLE_FLIGHT_POLL_MS = 25;
+
+// ##############################
 // Cache Context Types
 // ##############################
 
@@ -236,13 +253,10 @@ export class Query<TData = unknown, TError = Error> {
         }
       }
 
-      // L3: Fetch from source (queryFn)
-      const data = await this.options.queryFn();
-
-      // Populate L2 (shared cache) - fire and forget to avoid blocking
-      if (this.sharedCacheContext) {
-        this.setInSharedCache(data);
-      }
+      // L3: Fetch from source (queryFn). When the shared-cache adapter supports
+      // distributed locking, fetchFromSource coalesces a cold concurrent burst
+      // across processes into a single source call and populates L2 itself.
+      const data = await this.fetchFromSource();
 
       // Normalize into the entity store (if configured)
       if (this.normalizedCacheContext) {
@@ -375,6 +389,88 @@ export class Query<TData = unknown, TError = Error> {
     } catch (cacheError) {
       this.logCacheWarning('Shared cache write failed', cacheError);
     }
+  }
+
+  /**
+   * Fetch from the source (L3), coalescing concurrent cold-cache misses across
+   * processes when the shared-cache adapter supports distributed locking.
+   *
+   * - No lock-capable adapter: fetch directly and populate L2 fire-and-forget.
+   *   Fan-out is bounded by the number of processes (each process still
+   *   single-flights its own concurrent callers via `currentFetchPromise`).
+   * - Lock-capable adapter: exactly one process wins the lock and fetches;
+   *   the others wait for it to publish to L2. If the winner crashes or fails
+   *   without publishing, its lock expires (or is released) and a waiting
+   *   process takes over — so a failure degrades to an extra fetch, never a
+   *   deadlock. We also fall back to a direct fetch if the lock layer errors or
+   *   the wait times out: correctness over coalescing.
+   */
+  private async fetchFromSource(): Promise<TData> {
+    const ctx = this.sharedCacheContext;
+
+    if (!ctx || !ctx.adapter.acquireLock || !ctx.adapter.releaseLock) {
+      const data = await this.options.queryFn();
+      if (ctx) void this.setInSharedCache(data);
+      return data;
+    }
+
+    const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const deadline = Date.now() + SINGLE_FLIGHT_LOCK_TTL_MS;
+
+    while (true) {
+      // Always prefer an already-published value over taking the lock
+      // ourselves. This is what keeps fan-out at 1: once the winner has
+      // published, a waiter returns that value instead of acquiring the
+      // now-free lock and fetching redundantly.
+      const cached = await this.getFromSharedCache();
+      if (cached !== CACHE_MISS) return cached;
+
+      let acquired = false;
+      try {
+        acquired = await ctx.adapter.acquireLock(
+          ctx.key,
+          token,
+          SINGLE_FLIGHT_LOCK_TTL_MS,
+        );
+      } catch (lockError) {
+        this.logCacheWarning('Shared cache lock acquire failed', lockError);
+        break; // degrade to a direct fetch below
+      }
+
+      if (acquired) {
+        // Winner: fetch, publish to L2 (awaited, so waiters can see it before
+        // we release), then release the lock even if the fetch throws. Note we
+        // only reach here on a cold L2 (checked above), so taking the lock also
+        // correctly takes over a previous winner that crashed (lock expired) or
+        // failed fast (released without publishing).
+        try {
+          const data = await this.options.queryFn();
+          await this.setInSharedCache(data);
+          return data;
+        } finally {
+          try {
+            await ctx.adapter.releaseLock(ctx.key, token);
+          } catch (releaseError) {
+            this.logCacheWarning(
+              'Shared cache lock release failed',
+              releaseError,
+            );
+          }
+        }
+      }
+
+      // Lock is held by another process and no value yet. Wait and retry.
+      if (Date.now() >= deadline) break;
+      await new Promise((resolve) =>
+        setTimeout(resolve, SINGLE_FLIGHT_POLL_MS),
+      );
+    }
+
+    // Degraded path: lock layer errored or we waited out the deadline without a
+    // value. Fetch directly so the request never hangs.
+    const data = await this.options.queryFn();
+    void this.setInSharedCache(data);
+    return data;
   }
 
   /**
