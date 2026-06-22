@@ -746,29 +746,33 @@ describe('QueryClient Cross-Process Invalidation', () => {
           store.delete(key);
         }),
         // Simulate pub/sub for invalidation messages
-        subscribeToInvalidations: vi.fn((clientId: string, callback: (key: string) => void) => {
-          if (!invalidationCallbacks.has(clientId)) {
-            invalidationCallbacks.set(clientId, new Set());
-          }
-          invalidationCallbacks.get(clientId)!.add(callback);
-          return () => {
-            invalidationCallbacks.get(clientId)?.delete(callback);
-          };
-        }),
-        publishInvalidation: vi.fn(async (key: string, fromClientId: string) => {
-          // Notify all subscribers except the one who published
-          invalidationCallbacks.forEach((callbacks, clientId) => {
-            if (clientId !== fromClientId) {
-              callbacks.forEach((callback) => callback(key));
+        subscribeToInvalidations: vi.fn(
+          (clientId: string, callback: (key: string) => void) => {
+            if (!invalidationCallbacks.has(clientId)) {
+              invalidationCallbacks.set(clientId, new Set());
             }
-          });
-        }),
+            invalidationCallbacks.get(clientId)!.add(callback);
+            return () => {
+              invalidationCallbacks.get(clientId)?.delete(callback);
+            };
+          },
+        ),
+        publishInvalidation: vi.fn(
+          async (key: string, fromClientId: string) => {
+            // Notify all subscribers except the one who published
+            invalidationCallbacks.forEach((callbacks, clientId) => {
+              if (clientId !== fromClientId) {
+                callbacks.forEach((callback) => callback(key));
+              }
+            });
+          },
+        ),
       },
     };
   }
 
-  it('should invalidate L1 on other workers when one worker invalidates (currently fails)', async () => {
-    const { adapter, store } = createMockSharedCache();
+  it('should invalidate L1 on other workers when one worker invalidates', async () => {
+    const { adapter } = createMockSharedCache();
 
     // Create two QueryClient instances simulating two workers
     const workerA = new QueryClient({
@@ -812,21 +816,16 @@ describe('QueryClient Cross-Process Invalidation', () => {
     // Worker A invalidates the query
     workerA.invalidateQueries('shared-data');
 
-    // Wait for invalidation to propagate
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // Wait for invalidation to propagate and refetches to complete
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Worker A should have triggered a refetch
-    await new Promise((resolve) => setTimeout(resolve, 10));
     expect(fetchCount).toBeGreaterThan(1);
 
-    // The problem: Worker B still has stale data in its L1
-    // This test will FAIL because Worker B's L1 is not invalidated
-    // Worker B's query should have been invalidated and refetched
+    // Worker B should have been invalidated via cross-process broadcast
+    // and should have fresh data
     expect(queryB.state.data).not.toEqual({ version: 1, data: 'v1' });
-
-    // Worker B should have fresh data
-    const resultB2 = await queryB.fetch();
-    expect(resultB2.version).toBeGreaterThan(1);
+    expect(queryB.state.data.version).toBeGreaterThan(1);
   });
 
   it('should handle concurrent invalidations from multiple workers', async () => {
@@ -844,29 +843,36 @@ describe('QueryClient Cross-Process Invalidation', () => {
       sharedCache: { adapter, defaultTtl: 60000 },
     });
 
-    const queryFn = vi.fn().mockResolvedValue({ data: 'initial' });
+    let fetchCount = 0;
+    const queryFn = vi.fn().mockImplementation(async () => {
+      fetchCount++;
+      return { data: 'initial', version: fetchCount };
+    });
 
-    // All workers fetch the same data
+    // All workers fetch the same data (sequentially to avoid race conditions)
     const queryA = workerA.getQuery({ queryKey: 'test', queryFn });
     const queryB = workerB.getQuery({ queryKey: 'test', queryFn });
     const queryC = workerC.getQuery({ queryKey: 'test', queryFn });
 
-    await Promise.all([queryA.fetch(), queryB.fetch(), queryC.fetch()]);
+    await queryA.fetch();
+    await queryB.fetch(); // Should get from L2
+    await queryC.fetch(); // Should get from L2
+
+    expect(fetchCount).toBe(1); // Only one L3 fetch
+
+    // Capture initial versions
+    const initialVersion = queryB.state.data.version;
 
     // Worker A invalidates
     workerA.invalidateQueries('test');
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Wait for invalidation to propagate and refetches to complete
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // All workers should have invalidated their L1
-    // This will also fail without cross-process invalidation
-    const statesAfterInvalidation = [
-      queryA.state.status,
-      queryB.state.status,
-      queryC.state.status,
-    ];
-
-    // At least queryB and queryC should be loading or should have refetched
-    expect(statesAfterInvalidation.some((s) => s === 'loading' || s === 'success')).toBe(true);
+    // All workers should have been invalidated and refetched
+    // queryB and queryC should have new data from cross-process invalidation
+    expect(queryB.state.data.version).toBeGreaterThan(initialVersion);
+    expect(queryC.state.data.version).toBeGreaterThan(initialVersion);
+    expect(fetchCount).toBeGreaterThan(1); // At least one more refetch
   });
 });
