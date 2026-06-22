@@ -72,6 +72,12 @@ export class QueryClient {
         this.sharedCacheConfig?.defaultTtl ??
         DEFAULT_SHARED_CACHE_TTL;
 
+      // Determine SWR configuration with defaults
+      const swrConfig = this.sharedCacheConfig?.staleWhileRevalidate;
+      const swrEnabled = swrConfig?.enabled ?? true;
+      const swrStaleRatio = swrConfig?.staleRatio ?? 0.8;
+      const swrJitter = swrConfig?.jitter ?? 0.1;
+
       query = new Query<TData, TError>(
         options,
         () => {
@@ -89,6 +95,9 @@ export class QueryClient {
                 adapter: this.sharedCacheConfig.adapter,
                 key,
                 ttl: sharedCacheTtl,
+                swrEnabled,
+                swrStaleRatio,
+                swrJitter,
               }
             : undefined,
         // Pass normalized cache context if configured

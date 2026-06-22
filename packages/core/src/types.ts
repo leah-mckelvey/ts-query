@@ -125,6 +125,26 @@ export function createInitialMutationState<
 // ##############################
 
 /**
+ * Metadata wrapper for cached entries in L2 storage.
+ * Enables stale-while-revalidate by tracking timing windows:
+ * - Fresh: [cachedAt, softExpiry) — serve immediately, no revalidation
+ * - Stale: [softExpiry, hardExpiry) — serve stale + trigger background refresh
+ * - Expired: [hardExpiry, ∞) — must refetch from source
+ *
+ * @template TData - The type of the cached data
+ */
+export interface CacheEntryMetadata<TData> {
+  /** The actual cached value */
+  data: TData;
+  /** Timestamp (ms since epoch) when this entry was stored */
+  cachedAt: number;
+  /** Timestamp (ms since epoch) when data becomes stale (triggers background revalidation) */
+  softExpiry: number;
+  /** Timestamp (ms since epoch) when data expires completely (removal from cache) */
+  hardExpiry: number;
+}
+
+/**
  * Adapter interface for shared cache backends (Redis, Memcached, etc.)
  * Used as L2 cache in the tiered caching hierarchy: L1 (in-process) → L2 (shared) → L3 (source)
  */
@@ -143,6 +163,38 @@ export interface SharedCacheAdapter {
 }
 
 /**
+ * Configuration for stale-while-revalidate behavior.
+ */
+export interface StaleWhileRevalidateConfig {
+  /**
+   * Enable stale-while-revalidate.
+   * When true, stale cache entries are served immediately while refreshing in the background.
+   * When false, stale entries are treated as cache misses.
+   * @default true
+   */
+  enabled?: boolean;
+  /**
+   * Ratio of TTL at which data becomes stale (soft expiry).
+   * Must be between 0 and 1.
+   * For example, with a 5-minute TTL and staleRatio=0.8:
+   * - Fresh from 0-4 minutes
+   * - Stale from 4-5 minutes (serves cached data + background refresh)
+   * - Expired after 5 minutes (hard expiry with jitter)
+   * @default 0.8
+   */
+  staleRatio?: number;
+  /**
+   * Random jitter applied to hard expiry to desynchronize cache invalidations.
+   * Must be between 0 and 0.5.
+   * For example, with jitter=0.1 and TTL=5min:
+   * - Hard expiry occurs randomly between 4.5-5.5 minutes
+   * This prevents cache stampedes when many keys expire simultaneously.
+   * @default 0.1
+   */
+  jitter?: number;
+}
+
+/**
  * Configuration for the shared cache (L2) layer.
  */
 export interface SharedCacheConfig {
@@ -150,6 +202,8 @@ export interface SharedCacheConfig {
   adapter: SharedCacheAdapter;
   /** Default TTL for shared cache entries in milliseconds. Defaults to 5 minutes. */
   defaultTtl?: number;
+  /** Stale-while-revalidate configuration. */
+  staleWhileRevalidate?: StaleWhileRevalidateConfig;
 }
 
 // ##############################
