@@ -140,6 +140,20 @@ export interface SharedCacheAdapter {
    * Optional - primarily used for testing to reset state between tests.
    */
   clear?: () => Promise<void>;
+  /**
+   * Subscribe to invalidation messages from other workers.
+   * Returns an unsubscribe function.
+   * Optional - if not implemented, cross-process invalidation will be disabled.
+   */
+  subscribeToInvalidations?: (
+    clientId: string,
+    callback: (key: string) => void,
+  ) => () => void;
+  /**
+   * Publish an invalidation message to other workers.
+   * Optional - if not implemented, cross-process invalidation will be disabled.
+   */
+  publishInvalidation?: (key: string, fromClientId: string) => Promise<void>;
 }
 
 /**
