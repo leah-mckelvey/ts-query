@@ -44,12 +44,12 @@ class FocusManager {
 
     window.addEventListener('focus', onFocus);
     window.addEventListener('blur', onBlur);
-    window.addEventListener('visibilitychange', onVisibilityChange);
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     this.cleanup = () => {
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('blur', onBlur);
-      window.removeEventListener('visibilitychange', onVisibilityChange);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }
 

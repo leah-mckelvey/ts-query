@@ -41,12 +41,14 @@ export function useQuery<TData = unknown, TError = Error>(
   }, [query, enabled]);
 
   // Handle refetchOnMount
+  // This effect runs when the query instance changes (e.g., queryKey change)
+  // or when enabled flips from false to true
   useEffect(() => {
     const refetchOnMount = options.refetchOnMount ?? 'stale-only';
 
     if (!enabled) return;
 
-    // Always refetch on mount
+    // Always refetch when this query becomes active
     if (refetchOnMount === true) {
       query.fetch().catch(() => {
         // Error already handled by Query class / surfaced via state.
@@ -59,8 +61,7 @@ export function useQuery<TData = unknown, TError = Error>(
       });
     }
     // false: never refetch on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run on mount
+  }, [query, enabled, options.refetchOnMount]);
 
   return state;
 }

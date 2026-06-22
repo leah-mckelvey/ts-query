@@ -179,10 +179,11 @@ export class Query<TData = unknown, TError = Error> {
       subscription.unsubscribe();
       this.subscriberCount--;
 
-      // When the last subscriber unsubscribes, cleanup background refetch and
-      // (re)schedule garbage collection so the query can be collected once it
-      // truly becomes unused.
+      // When the last subscriber unsubscribes, cleanup background refetch,
+      // abort in-flight fetches, and (re)schedule garbage collection so the
+      // query can be collected once it truly becomes unused.
       if (this.subscriberCount === 0) {
+        this.cancelCurrentFetch();
         this.cleanupBackgroundRefetch();
         this.cleanupPolling();
         this.scheduleGarbageCollection();
@@ -593,7 +594,8 @@ export class Query<TData = unknown, TError = Error> {
     const refetchIntervalInBackground =
       this.options.refetchIntervalInBackground ?? false;
 
-    if (!refetchInterval) {
+    // Only setup polling for valid positive intervals
+    if (!refetchInterval || refetchInterval <= 0) {
       return;
     }
 

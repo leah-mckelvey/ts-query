@@ -82,7 +82,12 @@ export class QueryClient {
 
     // If filters is a QueryKey (string or array), convert to QueryFilters
     if (typeof filters === 'string' || Array.isArray(filters)) {
-      return { queryKey: filters as QueryKey, exact: false };
+      // For backward compatibility: string keys default to exact match,
+      // array keys default to prefix match (TanStack Query behavior)
+      return {
+        queryKey: filters as QueryKey,
+        exact: typeof filters === 'string',
+      };
     }
 
     return filters as QueryFilters;
@@ -416,16 +421,15 @@ export class QueryClient {
 
   /**
    * Manually set data for a query key. This populates the cache as if the query
-   * had successfully fetched and can be used for optimistic updates or seeding
-   * the cache with known data.
+   * had successfully fetched and can be used for optimistic updates.
+   *
+   * Note: The query must already exist (created via getQuery or useQuery) before
+   * you can set data on it. To seed initial data, use the `initialData` option
+   * when creating the query instead.
    *
    * @example
    * // After a mutation, update the list cache optimistically
    * client.setQueryData(['users'], (old) => [...old, newUser]);
-   *
-   * @example
-   * // Seed cache with initial data
-   * client.setQueryData(['user', id], userData);
    */
   setQueryData<TData = unknown>(
     queryKey: QueryKey,
@@ -435,8 +439,8 @@ export class QueryClient {
     const query = this.queries.get(key) as Query<TData, unknown> | undefined;
 
     if (!query) {
-      // Query doesn't exist yet - we can't set data without a Query instance
-      // This matches TanStack Query behavior - data is only set if query exists
+      // Query doesn't exist yet - we can't set data without a Query instance.
+      // To seed initial data, use `initialData` option when creating the query.
       return;
     }
 
