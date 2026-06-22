@@ -218,6 +218,10 @@ export interface QueryClientConfig {
    * When this limit is reached, the least recently used query with zero subscribers
    * will be evicted. Queries with active subscribers are never evicted.
    *
+   * **Note:** This is a best-effort bound. If all queries have active subscribers,
+   * the cache may temporarily exceed `maxQueries` to avoid breaking active subscriptions.
+   * This overflow is expected and safe - once subscribers are removed, eviction resumes.
+   *
    * @default Infinity (unbounded - suitable for client-side with component-based GC)
    *
    * For server-side deployments handling many distinct keys across multiple users,

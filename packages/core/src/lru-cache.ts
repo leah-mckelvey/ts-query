@@ -274,7 +274,8 @@ export class LRUCache<K, V> {
       node = node.prev;
     }
 
-    // No evictable entries found - allow overflow
-    // This is a safety mechanism to prevent evicting active queries
+    // No evictable entries found - allow overflow rather than evicting protected entries
+    // This is intentional for QueryClient (protects queries with active subscribers)
+    // For hard bounds without overflow, don't use an eviction predicate
   }
 }

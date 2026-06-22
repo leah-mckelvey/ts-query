@@ -27,11 +27,9 @@ export class InMemoryAdapter implements SharedCacheAdapter {
 
   constructor(maxEntries: number = 10000) {
     // LRU cache with max size bound to prevent unbounded growth
-    this.store = new LRUCache(
-      maxEntries,
-      // Evict expired entries first, then fall back to LRU
-      (_key: string, entry: CacheEntry) => Date.now() > entry.expiresAt,
-    );
+    // No eviction predicate - use pure LRU eviction
+    // TTL-based expiry is handled by get() and periodic cleanup
+    this.store = new LRUCache(maxEntries);
 
     // Periodic cleanup of expired entries
     this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);

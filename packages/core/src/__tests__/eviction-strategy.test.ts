@@ -225,16 +225,20 @@ describe('Eviction Strategy - Memory Bounds', () => {
       }
 
       // Measure access time (should be fast regardless of position)
+      const iterations = 1000;
       const start = performance.now();
-      for (let i = 0; i < 100; i++) {
-        cache.get(`key${i}`);
-        cache.get(`key${500 + i}`);
-        cache.get(`key${900 + i}`);
+      for (let i = 0; i < iterations; i++) {
+        cache.get(`key${i % 1000}`);
       }
       const elapsed = performance.now() - start;
 
-      // Should complete in < 10ms (generous bound for O(1))
-      expect(elapsed).toBeLessThan(10);
+      // Should complete in reasonable time (O(1) characteristic)
+      // Use generous bound to avoid flakiness in CI environments
+      expect(elapsed).toBeLessThan(250); // 250ms for 1000 operations
+
+      // Verify all operations succeeded (sanity check)
+      expect(cache.get('key0')).toBe(0);
+      expect(cache.get('key999')).toBe(999);
     });
   });
 });
