@@ -280,7 +280,7 @@ describe('Box', () => {
       const inner = container.querySelector('#inner') as HTMLElement;
 
       expect(outer.style.padding).toBe('16px');
-      expect(outer.style.backgroundColor).toBe('rgb(226, 232, 240)');
+      expect(outer.style.backgroundColor).toBe('#e2e8f0');
 
       expect(inner.style.padding).toBe('8px');
       expect(inner.style.backgroundColor).toBe('#ffffff');
