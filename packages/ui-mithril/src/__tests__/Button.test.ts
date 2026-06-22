@@ -15,7 +15,7 @@ const testButtonStyles = (
   const element = container.firstChild as HTMLElement;
 
   Object.entries(expectedStyles).forEach(([property, expected]) => {
-    expect(element.style[property as any]).toBe(expected);
+    expect(element.style[property as keyof CSSStyleDeclaration]).toBe(expected);
   });
 };
 
