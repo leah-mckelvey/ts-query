@@ -12,6 +12,8 @@ export { Mutation } from './mutation';
 
 export { createStore } from './store';
 export { NormalizedCache } from './normalized-cache';
+export { LRUCache } from './lru-cache';
+export type { EvictionPredicate, EvictionCallback } from './lru-cache';
 
 // #######################################
 // TYPE EXPORTS

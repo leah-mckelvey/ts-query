@@ -77,6 +77,14 @@ export class Query<TData = unknown, TError = Error> {
     return this.state$.asObservable();
   }
 
+  /**
+   * Get the current number of active subscribers.
+   * Used by QueryClient to determine if a query can be evicted from the LRU cache.
+   */
+  get activeSubscriberCount(): number {
+    return this.subscriberCount;
+  }
+
   constructor(
     options: QueryOptions<TData, TError>,
     onGarbageCollection?: () => void,

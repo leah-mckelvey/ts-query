@@ -5,6 +5,7 @@
 import { Query } from './query';
 import { Mutation } from './mutation';
 import { NormalizedCache } from './normalized-cache';
+import { LRUCache } from './lru-cache';
 import type {
   QueryKey,
   QueryOptions,
@@ -27,7 +28,7 @@ export class QueryClient {
   // ##############################
   // State
   // ##############################
-  private queries = new Map<string, Query<unknown, unknown>>();
+  private queries: LRUCache<string, Query<unknown, unknown>>;
   private sharedCacheConfig?: SharedCacheConfig;
   private normalizedCache?: NormalizedCache;
 
@@ -40,6 +41,19 @@ export class QueryClient {
     if (config?.normalizedCache) {
       this.normalizedCache = new NormalizedCache(config.normalizedCache);
     }
+
+    // Initialize LRU cache with maxQueries bound (default: Infinity for unbounded)
+    const maxQueries = config?.maxQueries ?? Infinity;
+    this.queries = new LRUCache(
+      maxQueries,
+      // Only evict queries with zero subscribers (never evict active queries)
+      (_key: string, query: Query<unknown, unknown>) =>
+        query.activeSubscriberCount === 0,
+      // Cleanup evicted queries by calling destroy() to clear timers
+      (_key: string, query: Query<unknown, unknown>) => {
+        query.destroy();
+      },
+    );
   }
 
   // ##############################

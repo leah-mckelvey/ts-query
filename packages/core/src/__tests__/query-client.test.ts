@@ -720,3 +720,176 @@ describe('QueryClient with SharedCache (L2)', () => {
     expect(newQuery).not.toBe(query);
   });
 });
+
+describe('QueryClient LRU Eviction', () => {
+  it('should not evict queries when under maxQueries limit', () => {
+    const client = new QueryClient({ maxQueries: 3 });
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    const query1 = client.getQuery({ queryKey: 'key1', queryFn });
+    const query2 = client.getQuery({ queryKey: 'key2', queryFn });
+    const query3 = client.getQuery({ queryKey: 'key3', queryFn });
+
+    // All queries should still be cached
+    expect(client.getQuery({ queryKey: 'key1', queryFn })).toBe(query1);
+    expect(client.getQuery({ queryKey: 'key2', queryFn })).toBe(query2);
+    expect(client.getQuery({ queryKey: 'key3', queryFn })).toBe(query3);
+  });
+
+  it('should evict LRU query when maxQueries is exceeded', async () => {
+    const client = new QueryClient({ maxQueries: 3 });
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    // Create 3 queries - at this point LRU order is: query3, query2, query1
+    const query1 = client.getQuery({ queryKey: 'key1', queryFn });
+    const query2 = client.getQuery({ queryKey: 'key2', queryFn });
+    const query3 = client.getQuery({ queryKey: 'key3', queryFn });
+
+    // Fetch all to ensure they complete and have subscriberCount = 0
+    await query1.fetch();
+    await query2.fetch();
+    await query3.fetch();
+
+    // Wait a bit to ensure garbage collection timers don't interfere
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // Add 4th query - should evict key1 (least recently used)
+    // After this, LRU order should be: query4, query3, query2
+    const query4 = client.getQuery({ queryKey: 'key4', queryFn });
+
+    // key2, key3, key4 should still be cached
+    expect(client.getQuery({ queryKey: 'key2', queryFn })).toBe(query2);
+    expect(client.getQuery({ queryKey: 'key3', queryFn })).toBe(query3);
+    expect(client.getQuery({ queryKey: 'key4', queryFn })).toBe(query4);
+
+    // key1 should be evicted (new instance created)
+    // Note: This creates a 5th query, which evicts key2 (now LRU after previous gets)
+    const newQuery1 = client.getQuery({ queryKey: 'key1', queryFn });
+    expect(newQuery1).not.toBe(query1);
+  });
+
+  it('should update LRU order when accessing queries', async () => {
+    const client = new QueryClient({ maxQueries: 3 });
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    const query1 = client.getQuery({ queryKey: 'key1', queryFn });
+    const query2 = client.getQuery({ queryKey: 'key2', queryFn });
+    const query3 = client.getQuery({ queryKey: 'key3', queryFn });
+
+    await query1.fetch();
+    await query2.fetch();
+    await query3.fetch();
+
+    // Access key1 to make it recently used
+    // LRU order now: key1 (most recent), key3, key2 (least recent)
+    client.getQuery({ queryKey: 'key1', queryFn });
+
+    // Add key4 - should evict key2 (now least recently used)
+    // LRU order becomes: key4, key1, key3
+    const query4 = client.getQuery({ queryKey: 'key4', queryFn });
+
+    // key1, key3, and key4 should still be cached
+    expect(client.getQuery({ queryKey: 'key1', queryFn })).toBe(query1);
+    expect(client.getQuery({ queryKey: 'key3', queryFn })).toBe(query3);
+    expect(client.getQuery({ queryKey: 'key4', queryFn })).toBe(query4);
+
+    // key2 should have been evicted
+    const newQuery2 = client.getQuery({ queryKey: 'key2', queryFn });
+    expect(newQuery2).not.toBe(query2);
+  });
+
+  it('should never evict queries with active subscribers', async () => {
+    const client = new QueryClient({ maxQueries: 2 });
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    const query1 = client.getQuery({ queryKey: 'key1', queryFn });
+    const query2 = client.getQuery({ queryKey: 'key2', queryFn });
+
+    // Subscribe to query1 (active subscriber)
+    const unsubscribe = query1.subscribe(() => {});
+
+    await query1.fetch();
+    await query2.fetch();
+
+    // Try to add more queries
+    // query1 has an active subscriber, so it's not evictable
+    // query2 has no subscribers, so it should be evicted when adding query3
+    const query3 = client.getQuery({ queryKey: 'key3', queryFn });
+
+    // Adding query4 will evict query3 (since query1 is still protected)
+    const query4 = client.getQuery({ queryKey: 'key4', queryFn });
+
+    // query1 should NOT be evicted (has active subscriber)
+    expect(client.getQuery({ queryKey: 'key1', queryFn })).toBe(query1);
+
+    // Clean up
+    unsubscribe();
+
+    // Verify queries were created successfully
+    expect(query3).toBeDefined();
+    expect(query4).toBeDefined();
+  });
+
+  it('should work with unbounded cache (default behavior)', async () => {
+    const client = new QueryClient(); // No maxQueries specified (Infinity)
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    // Create many queries
+    const queries = [];
+    for (let i = 0; i < 100; i++) {
+      const query = client.getQuery({ queryKey: `key${i}`, queryFn });
+      queries.push(query);
+      await query.fetch();
+    }
+
+    // All queries should still be cached (no eviction)
+    for (let i = 0; i < 100; i++) {
+      expect(client.getQuery({ queryKey: `key${i}`, queryFn })).toBe(
+        queries[i],
+      );
+    }
+  });
+
+  it('should handle maxQueries=0 edge case', () => {
+    const client = new QueryClient({ maxQueries: 0 });
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    // Should not cache anything
+    const query1 = client.getQuery({ queryKey: 'key1', queryFn });
+    const query2 = client.getQuery({ queryKey: 'key1', queryFn });
+
+    // Each call should return a new instance
+    expect(query1).not.toBe(query2);
+  });
+
+  it('should evict queries after subscribers unsubscribe', async () => {
+    const client = new QueryClient({ maxQueries: 2 });
+    const queryFn = vi.fn().mockResolvedValue('data');
+
+    const query1 = client.getQuery({ queryKey: 'key1', queryFn });
+    const query2 = client.getQuery({ queryKey: 'key2', queryFn });
+
+    // Subscribe to both
+    const unsub1 = query1.subscribe(() => {});
+    const unsub2 = query2.subscribe(() => {});
+
+    await query1.fetch();
+    await query2.fetch();
+
+    // Add key3 - should allow overflow (both have subscribers)
+    const query3 = client.getQuery({ queryKey: 'key3', queryFn });
+
+    // Unsubscribe from query1
+    unsub1();
+
+    // Add key4 - should evict query1 (now has no subscribers)
+    const query4 = client.getQuery({ queryKey: 'key4', queryFn });
+
+    // query1 should be evicted
+    const newQuery1 = client.getQuery({ queryKey: 'key1', queryFn });
+    expect(newQuery1).not.toBe(query1);
+
+    // Clean up
+    unsub2();
+  });
+});
