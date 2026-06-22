@@ -5,7 +5,11 @@
  * The QueryClient handles L1 (in-process) automatically.
  */
 
-import { QueryClient, type SharedCacheAdapter } from '@ts-query/core';
+import {
+  QueryClient,
+  type SharedCacheAdapter,
+  LRUCache,
+} from '@ts-query/core';
 
 // ============================================================================
 // In-Memory Adapter (for development / single-process)
@@ -17,11 +21,18 @@ interface CacheEntry {
 }
 
 export class InMemoryAdapter implements SharedCacheAdapter {
-  private store = new Map<string, CacheEntry>();
+  private store: LRUCache<string, CacheEntry>;
   // Use union type for cross-environment compatibility (Node.js vs browser)
   private cleanupInterval: NodeJS.Timeout | number;
 
-  constructor() {
+  constructor(maxEntries: number = 10000) {
+    // LRU cache with max size bound to prevent unbounded growth
+    this.store = new LRUCache(
+      maxEntries,
+      // Evict expired entries first, then fall back to LRU
+      (_key: string, entry: CacheEntry) => Date.now() > entry.expiresAt,
+    );
+
     // Periodic cleanup of expired entries
     this.cleanupInterval = setInterval(() => this.cleanup(), 60_000);
   }
@@ -108,9 +119,10 @@ export class RedisAdapter implements SharedCacheAdapter {
 // Create the QueryClient with tiered caching
 // ============================================================================
 
-const sharedCacheAdapter = new InMemoryAdapter();
+const sharedCacheAdapter = new InMemoryAdapter(10000); // Max 10k entries in L2
 
 export const queryClient = new QueryClient({
+  maxQueries: 1000, // Max 1k queries in L1 (server-side bound)
   sharedCache: {
     adapter: sharedCacheAdapter,
     defaultTtl: 60_000, // 1 minute default
