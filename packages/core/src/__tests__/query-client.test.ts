@@ -309,6 +309,37 @@ describe('QueryClient', () => {
       }
       expect(client.getQuery({ queryKey: 'k0', queryFn })).toBe(first);
     });
+
+    it('exceeds the cap rather than evict when every query is pinned by a subscriber (soft limit)', async () => {
+      const client = new QueryClient({ maxQueries: 1 });
+      const queryFn = vi.fn().mockResolvedValue('data');
+
+      const a = client.getQuery({ queryKey: 'a', queryFn, retry: 0 });
+      await a.fetch();
+      a.subscribe(() => {});
+
+      const b = client.getQuery({ queryKey: 'b', queryFn, retry: 0 });
+      await b.fetch();
+      b.subscribe(() => {}); // both pinned, cap 1
+
+      // Neither active query may be collected out from under its subscriber.
+      expect(client.getQuery({ queryKey: 'a', queryFn })).toBe(a);
+      expect(client.getQuery({ queryKey: 'b', queryFn })).toBe(b);
+    });
+
+    it('does not evict the just-created idle query even when the cap is full of pinned queries', async () => {
+      const client = new QueryClient({ maxQueries: 1 });
+      const queryFn = vi.fn().mockResolvedValue('data');
+
+      const pinned = client.getQuery({ queryKey: 'a', queryFn, retry: 0 });
+      await pinned.fetch();
+      pinned.subscribe(() => {}); // 'a' pinned, at cap
+
+      // 'b' is brand-new and has no subscribers yet; it must not evict itself
+      // during the capacity check that its own creation triggers.
+      const b = client.getQuery({ queryKey: 'b', queryFn });
+      expect(client.getQuery({ queryKey: 'b', queryFn })).toBe(b);
+    });
   });
 });
 

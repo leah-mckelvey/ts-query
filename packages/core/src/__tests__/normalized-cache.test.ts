@@ -554,6 +554,29 @@ describe('QueryClient + normalized cache', () => {
       expect(client.readFragment('User', 2)).toBeUndefined();
     });
 
+    it('exceeds the cap rather than evict when every over-cap entity is pinned (soft limit)', async () => {
+      const client = new QueryClient({ normalizedCache: { maxEntities: 1 } });
+
+      // Subscribe *before* awaiting the fetch — this mirrors how the framework
+      // adapters drive a query (subscribing auto-triggers the fetch), so the
+      // query has an active subscriber at the moment its data is normalized and
+      // its entity is therefore pinned during capacity enforcement.
+      const fnA = vi.fn().mockResolvedValue(makeUser(1, 'Alice'));
+      const a = client.getQuery({ queryKey: 'user:1', queryFn: fnA, retry: 0 });
+      a.subscribe(() => {});
+      await a.fetch();
+
+      const fnB = vi.fn().mockResolvedValue(makeUser(2, 'Bob'));
+      const b = client.getQuery({ queryKey: 'user:2', queryFn: fnB, retry: 0 });
+      b.subscribe(() => {});
+      await b.fetch(); // normalizes User:2 over the cap while both queries are active
+
+      // Both entities are pinned by active subscribers, so neither may be
+      // evicted; the store holds two despite the cap of one.
+      expect(client.readFragment('User', 1)).toBeDefined();
+      expect(client.readFragment('User', 2)).toBeDefined();
+    });
+
     it('never evicts an entity with a live fragment listener', () => {
       const cache = new NormalizedCache({ maxEntities: 1 });
       cache.normalize(makeUser(1, 'Alice'), 'user:1');
