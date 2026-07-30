@@ -588,6 +588,42 @@ describe('QueryClient + normalized cache', () => {
       expect(cache.readFragment('User', 2)).toBeUndefined();
     });
 
+    it('does not corrupt an inactive query snapshot when a shared entity is evicted then a co-referenced entity is written', async () => {
+      const client = new QueryClient({ normalizedCache: { maxEntities: 2 } });
+
+      // Inactive query holds Post:1 { author: User:1 }. Normalization inserts the
+      // nested User:1 first, then Post:1 — so User:1 is the least-recently-used.
+      const postFn = vi
+        .fn()
+        .mockResolvedValue(makePost(1, 'Hello', makeUser(1, 'Alice')));
+      const postQuery = client.getQuery({
+        queryKey: 'post:1',
+        queryFn: postFn,
+        retry: 0,
+      });
+      await postQuery.fetch(); // inactive — no subscribers
+
+      // Push over the cap of 2 → LRU evicts the unpinned User:1; Post:1 survives.
+      await client
+        .getQuery({
+          queryKey: 'user:2',
+          queryFn: vi.fn().mockResolvedValue(makeUser(2, 'Bob')),
+          retry: 0,
+        })
+        .fetch();
+      expect(client.readFragment('User', 1)).toBeUndefined(); // confirm eviction
+
+      // Writing the surviving, co-referenced Post:1 must NOT recompute the
+      // inactive query through the now-dangling User:1 ref and blank its author.
+      client.writeFragment('Post', 1, { title: 'Updated' });
+
+      const data = postQuery.state.data as ReturnType<typeof makePost>;
+      // The inactive query keeps its intact snapshot (no hole)…
+      expect(data.author).toEqual(makeUser(1, 'Alice'));
+      // …and is not live-updated while unsubscribed (it revalidates on next fetch).
+      expect(data.title).toBe('Hello');
+    });
+
     it('does not refetch inactive queries when their entity is evicted', async () => {
       const client = new QueryClient({ normalizedCache: { maxEntities: 1 } });
 

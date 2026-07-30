@@ -263,9 +263,16 @@ export class QueryClient {
       data as Record<string, unknown>,
     );
 
-    // Notify all affected queries to recompute their data from the normalized cache
+    // Recompute only queries with active subscribers. An inactive query has no
+    // view to update, and recomputing it could denormalize through a ref that
+    // LRU eviction has since removed — writing a hole into its otherwise intact
+    // snapshot. Active queries pin their entities, so their refs are always
+    // present and their recompute is complete; inactive queries revalidate from
+    // their own snapshot (and refetch) the next time they are used.
     this.notifyAffectedQueries(affectedKeys, (query) => {
-      query.recomputeFromNormalizedCache();
+      if (query.hasSubscribers()) {
+        query.recomputeFromNormalizedCache();
+      }
     });
   }
 
