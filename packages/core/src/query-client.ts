@@ -19,6 +19,9 @@ import type {
 
 const DEFAULT_SHARED_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+/** Default upper bound on cached queries before LRU eviction of idle queries. */
+const DEFAULT_MAX_QUERIES = 1000;
+
 // ########################################
 // QUERY CLIENT
 // ########################################
@@ -30,6 +33,7 @@ export class QueryClient {
   private queries = new Map<string, Query<unknown, unknown>>();
   private sharedCacheConfig?: SharedCacheConfig;
   private normalizedCache?: NormalizedCache;
+  private maxQueries: number;
 
   // ##############################
   // Initialization
@@ -37,8 +41,18 @@ export class QueryClient {
 
   constructor(config?: QueryClientConfig) {
     this.sharedCacheConfig = config?.sharedCache;
+    // A non-positive or NaN cap is meaningless; fall back to the default.
+    // `Infinity` is a valid opt-out and survives this check.
+    this.maxQueries =
+      typeof config?.maxQueries === 'number' && config.maxQueries > 0
+        ? config.maxQueries
+        : DEFAULT_MAX_QUERIES;
     if (config?.normalizedCache) {
       this.normalizedCache = new NormalizedCache(config.normalizedCache);
+      // Let the normalized cache pin entities that a live query depends on, so
+      // LRU eviction never removes data a mounted component is reading.
+      this.normalizedCache.isQueryKeyActive = (key) =>
+        this.queries.get(key)?.hasSubscribers() ?? false;
     }
   }
 
@@ -64,6 +78,11 @@ export class QueryClient {
     const key = this.getQueryKey(options.queryKey);
 
     let query = this.queries.get(key) as Query<TData, TError> | undefined;
+
+    if (query) {
+      // Cache hit — refresh LRU recency so hot queries survive eviction.
+      this.touchQuery(key);
+    }
 
     if (!query) {
       // Determine shared cache TTL: query-level override > client-level default > global default
@@ -95,9 +114,42 @@ export class QueryClient {
         this.normalizedCache ? { cache: this.normalizedCache, key } : undefined,
       );
       this.queries.set(key, query as unknown as Query<unknown, unknown>);
+      this.enforceQueryCapacity(key);
     }
 
     return query;
+  }
+
+  // ####################
+  // LRU Eviction
+  // ####################
+
+  /** Mark a cached query as most-recently-used (Map insertion-order LRU). */
+  private touchQuery(key: string): void {
+    const query = this.queries.get(key);
+    if (query) {
+      this.queries.delete(key);
+      this.queries.set(key, query);
+    }
+  }
+
+  /**
+   * Evict least-recently-used, subscriber-less queries until the cache is back
+   * within `maxQueries`. Queries with active subscribers are pinned and skipped,
+   * as is the query just inserted (`exceptKey`), so the cache may briefly exceed
+   * the cap as a soft limit rather than collect an in-use query.
+   */
+  private enforceQueryCapacity(exceptKey: string): void {
+    if (this.queries.size <= this.maxQueries) return;
+    // Map iteration is least-recently-used first; deleting the current key
+    // mid-iteration is well-defined.
+    for (const [key, query] of this.queries) {
+      if (this.queries.size <= this.maxQueries) break;
+      if (key === exceptKey) continue;
+      if (query.hasSubscribers()) continue;
+      query.destroy();
+      this.queries.delete(key);
+    }
   }
 
   // ####################

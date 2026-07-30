@@ -199,6 +199,16 @@ export interface NormalizedCacheConfig {
    * Types not listed here use the default policy (`keyFields: 'id'`).
    */
   typePolicies?: Record<string, TypePolicy>;
+  /**
+   * Maximum number of entities to keep in the store. When exceeded, the
+   * least-recently-used entities that are not referenced by an active query
+   * are evicted first (LRU). Entities pinned by an active query are never
+   * evicted, so the store may briefly exceed this as a soft limit.
+   *
+   * Pass `Infinity` to disable eviction (unbounded, the pre-1.2 behavior).
+   * Defaults to 5000.
+   */
+  maxEntities?: number;
 }
 
 // #######################################
@@ -213,6 +223,16 @@ export interface QueryClientConfig {
   sharedCache?: SharedCacheConfig;
   /** Optional normalized entity cache for GraphQL responses. */
   normalizedCache?: NormalizedCacheConfig;
+  /**
+   * Maximum number of queries to keep in the in-memory (L1) cache. When
+   * exceeded, the least-recently-used queries that have no active subscribers
+   * are evicted first (LRU) — an eager, capacity-driven complement to the
+   * per-query `cacheTime` garbage collection. Queries with active subscribers
+   * are never evicted, so the cache may briefly exceed this as a soft limit.
+   *
+   * Pass `Infinity` to disable eviction. Defaults to 1000.
+   */
+  maxQueries?: number;
 }
 
 // #######################################

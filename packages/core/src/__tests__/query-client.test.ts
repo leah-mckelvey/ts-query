@@ -248,6 +248,68 @@ describe('QueryClient', () => {
     expect(newQuery).not.toBe(query);
     vi.useRealTimers();
   });
+
+  // ##############################
+  // LRU Eviction (maxQueries)
+  // ##############################
+
+  describe('LRU eviction (maxQueries)', () => {
+    it('evicts the least-recently-used idle query once maxQueries is exceeded', () => {
+      const client = new QueryClient({ maxQueries: 2 });
+      const queryFn = vi.fn().mockResolvedValue('data');
+
+      const q1 = client.getQuery({ queryKey: 'a', queryFn });
+      client.getQuery({ queryKey: 'b', queryFn });
+      client.getQuery({ queryKey: 'c', queryFn }); // over cap -> evict 'a'
+
+      // 'a' was evicted, so requesting it again yields a fresh instance.
+      const q1Again = client.getQuery({ queryKey: 'a', queryFn });
+      expect(q1Again).not.toBe(q1);
+    });
+
+    it('spares a query that was recently accessed', () => {
+      const client = new QueryClient({ maxQueries: 2 });
+      const queryFn = vi.fn().mockResolvedValue('data');
+
+      const q1 = client.getQuery({ queryKey: 'a', queryFn });
+      client.getQuery({ queryKey: 'b', queryFn });
+
+      // Touch 'a' so it becomes most-recently-used, ahead of 'b'.
+      client.getQuery({ queryKey: 'a', queryFn });
+
+      client.getQuery({ queryKey: 'c', queryFn }); // evict LRU -> 'b'
+
+      expect(client.getQuery({ queryKey: 'a', queryFn })).toBe(q1); // survived
+      const bAgain = client.getQuery({ queryKey: 'b', queryFn });
+      expect(bAgain).not.toBe(q1); // 'b' was evicted (fresh instance)
+    });
+
+    it('never evicts a query with active subscribers', async () => {
+      const client = new QueryClient({ maxQueries: 1 });
+      const queryFn = vi.fn().mockResolvedValue('data');
+
+      const pinned = client.getQuery({ queryKey: 'a', queryFn, retry: 0 });
+      await pinned.fetch();
+      pinned.subscribe(() => {}); // keep 'a' mounted
+
+      // Adding 'b' exceeds the cap of 1, but 'a' is pinned by its subscriber.
+      client.getQuery({ queryKey: 'b', queryFn });
+
+      // 'a' must still be the same live instance.
+      expect(client.getQuery({ queryKey: 'a', queryFn })).toBe(pinned);
+    });
+
+    it('treats Infinity as unbounded (never evicts)', () => {
+      const client = new QueryClient({ maxQueries: Infinity });
+      const queryFn = vi.fn().mockResolvedValue('data');
+
+      const first = client.getQuery({ queryKey: 'k0', queryFn });
+      for (let i = 1; i < 50; i++) {
+        client.getQuery({ queryKey: `k${i}`, queryFn });
+      }
+      expect(client.getQuery({ queryKey: 'k0', queryFn })).toBe(first);
+    });
+  });
 });
 
 describe('QueryClient with SharedCache (L2)', () => {

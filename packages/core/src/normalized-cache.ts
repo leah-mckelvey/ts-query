@@ -1,6 +1,13 @@
 import type { TypePolicy, NormalizedCacheConfig } from './types';
 
 // #######################################
+// CONSTANTS
+// #######################################
+
+/** Default upper bound on the number of stored entities before LRU eviction. */
+const DEFAULT_MAX_ENTITIES = 5000;
+
+// #######################################
 // TYPE DEFINITIONS
 // #######################################
 
@@ -59,12 +66,29 @@ export class NormalizedCache {
 
   private config: NormalizedCacheConfig;
 
+  /** Soft upper bound on stored entities; LRU eviction keeps us at or below it. */
+  private maxEntities: number;
+
+  /**
+   * Wired up by QueryClient: reports whether a query key currently has active
+   * subscribers. Used to "pin" entities that a live view depends on so LRU
+   * eviction never pulls data out from under a mounted component.
+   */
+  isQueryKeyActive?: (queryKey: string) => boolean;
+
   // ##############################
   // INITIALIZATION
   // ##############################
 
   constructor(config: NormalizedCacheConfig = {}) {
     this.config = config;
+    // A non-positive or NaN cap is meaningless (it would evict everything or
+    // nothing coherently), so fall back to the default. `Infinity` is a valid
+    // opt-out and survives this check.
+    this.maxEntities =
+      typeof config.maxEntities === 'number' && config.maxEntities > 0
+        ? config.maxEntities
+        : DEFAULT_MAX_ENTITIES;
   }
 
   // ##############################
@@ -100,7 +124,14 @@ export class NormalizedCache {
    * The queryKey is used to build the reverse index (entity → queries).
    */
   normalize(data: unknown, queryKey: string): unknown {
-    return this.normalizeValue(data, queryKey);
+    const shape = this.normalizeValue(data, queryKey);
+    this.enforceCapacity();
+    return shape;
+  }
+
+  /** Current number of entities held in the store. */
+  size(): number {
+    return this.entities.size;
   }
 
   /**
@@ -127,9 +158,11 @@ export class NormalizedCache {
     const ref = this.makeRef(typename, id);
     const existing = this.entities.get(ref) ?? {};
     const merged = this.mergeEntity(typename, existing, data);
-    this.entities.set(ref, merged);
+    this.setEntity(ref, merged);
     this.notifyEntityListeners(ref);
-    return this.getAffectedQueries(ref);
+    const affected = this.getAffectedQueries(ref);
+    this.enforceCapacity();
+    return affected;
   }
 
   /**
@@ -231,6 +264,74 @@ export class NormalizedCache {
   }
 
   // ##############################
+  // INTERNAL HELPERS: LRU EVICTION
+  // ##############################
+
+  /**
+   * Insert or update an entity, marking it most-recently-used.
+   *
+   * A JS `Map` preserves insertion order and `set` on an existing key leaves
+   * its position untouched, so we delete-then-set to move the entry to the
+   * "newest" end. That gives us an O(1) LRU ordering straight from the Map:
+   * the hashmap + doubly-linked-list you'd hand-roll for an LRU cache, except
+   * the linked list is the engine's own.
+   */
+  private setEntity(ref: string, value: Record<string, unknown>): void {
+    this.entities.delete(ref);
+    this.entities.set(ref, value);
+  }
+
+  /** Mark an already-stored entity as most-recently-used (no-op if absent). */
+  private touch(ref: string): void {
+    const value = this.entities.get(ref);
+    if (value !== undefined) {
+      this.entities.delete(ref);
+      this.entities.set(ref, value);
+    }
+  }
+
+  /**
+   * An entity is "pinned" — never eligible for eviction — when a live view
+   * depends on it: either a query with active subscribers references it, or a
+   * `useFragment`-style entity listener is subscribed directly to it. Evicting a
+   * pinned entity would blank out mounted UI, so we keep it even over the cap.
+   *
+   * We deliberately do NOT invalidate/refetch on eviction: every query retains
+   * its own complete `state.data` snapshot, so an inactive query whose entity is
+   * evicted still renders correct cached data and simply repopulates the shared
+   * store on its next fetch. Refetching here would be wasted work and, when the
+   * cap is saturated by pinned entities, could loop.
+   */
+  private isPinned(ref: string): boolean {
+    if ((this.entityListeners.get(ref)?.size ?? 0) > 0) return true;
+    if (!this.isQueryKeyActive) return false;
+    const queries = this.entityToQueries.get(ref);
+    if (!queries) return false;
+    for (const key of queries) {
+      if (this.isQueryKeyActive(key)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Evict least-recently-used, unpinned entities until the store is back within
+   * `maxEntities`. If every over-cap entity is pinned the store stays above the
+   * cap (soft limit) rather than break a live view.
+   */
+  private enforceCapacity(): void {
+    if (this.entities.size <= this.maxEntities) return;
+
+    // `keys()` yields least-recently-used first. Deleting the current/visited
+    // key mid-iteration is well-defined for Map, so evicting in place is safe.
+    for (const ref of this.entities.keys()) {
+      if (this.entities.size <= this.maxEntities) break;
+      if (this.isPinned(ref)) continue;
+      this.entities.delete(ref);
+      this.entityToQueries.delete(ref);
+    }
+  }
+
+  // ##############################
   // INTERNAL HELPERS: OBJECT TRANSFORMATION
   // ##############################
 
@@ -294,7 +395,7 @@ export class NormalizedCache {
     const existing = this.entities.get(ref) ?? {};
     const typename = value.__typename as string;
     const merged = this.mergeEntity(typename, existing, normalized);
-    this.entities.set(ref, merged);
+    this.setEntity(ref, merged);
 
     // Track which query references this entity
     this.ensureSet(this.entityToQueries as Map<string, Set<unknown>>, ref).add(
@@ -331,6 +432,8 @@ export class NormalizedCache {
     if (isEntityRef(value)) {
       const entity = this.entities.get(value.__ref);
       if (entity === undefined) return undefined; // entity was evicted
+      // Reading an entity counts as "using" it, so refresh its LRU recency.
+      this.touch(value.__ref);
       return this.denormalizeValue(entity);
     }
 

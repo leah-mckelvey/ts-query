@@ -73,6 +73,15 @@ export class Query<TData = unknown, TError = Error> {
     return this.state$.value;
   }
 
+  /**
+   * Whether this query currently has active subscribers. Used by QueryClient to
+   * "pin" in-use queries against LRU eviction (an active query must not be
+   * collected out from under its subscribers).
+   */
+  hasSubscribers(): boolean {
+    return this.subscriberCount > 0;
+  }
+
   get state$Observable(): Observable<QueryState<TData, TError>> {
     return this.state$.asObservable();
   }

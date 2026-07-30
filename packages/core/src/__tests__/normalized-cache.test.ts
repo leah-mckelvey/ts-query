@@ -463,6 +463,136 @@ describe('QueryClient + normalized cache', () => {
   });
 
   // ##############################
+  // LRU Eviction (memory bound)
+  // ##############################
+
+  describe('LRU eviction', () => {
+    it('evicts the least-recently-used entity once maxEntities is exceeded', () => {
+      const cache = new NormalizedCache({ maxEntities: 2 });
+      cache.normalize(makeUser(1, 'Alice'), 'user:1');
+      cache.normalize(makeUser(2, 'Bob'), 'user:2');
+      cache.normalize(makeUser(3, 'Carol'), 'user:3'); // over cap -> evict User:1
+
+      expect(cache.size()).toBe(2);
+      expect(cache.readFragment('User', 1)).toBeUndefined();
+      expect(cache.readFragment('User', 2)).toBeDefined();
+      expect(cache.readFragment('User', 3)).toBeDefined();
+    });
+
+    it('spares an entity that was recently read (denormalize refreshes recency)', () => {
+      const cache = new NormalizedCache({ maxEntities: 2 });
+      const shape1 = cache.normalize(makeUser(1, 'Alice'), 'user:1');
+      cache.normalize(makeUser(2, 'Bob'), 'user:2');
+
+      // Re-read User:1 so it becomes most-recently-used, ahead of User:2.
+      cache.denormalize(shape1);
+
+      cache.normalize(makeUser(3, 'Carol'), 'user:3'); // evict LRU -> User:2
+
+      expect(cache.readFragment('User', 1)).toBeDefined();
+      expect(cache.readFragment('User', 2)).toBeUndefined();
+      expect(cache.readFragment('User', 3)).toBeDefined();
+    });
+
+    it('refreshes recency on write, sparing a re-written entity', () => {
+      const cache = new NormalizedCache({ maxEntities: 2 });
+      cache.normalize(makeUser(1, 'Alice'), 'user:1');
+      cache.normalize(makeUser(2, 'Bob'), 'user:2');
+      cache.writeFragment('User', 1, { name: 'Alice II' }); // touch User:1
+      cache.normalize(makeUser(3, 'Carol'), 'user:3'); // evict LRU -> User:2
+
+      expect(cache.readFragment('User', 1)).toBeDefined();
+      expect(cache.readFragment('User', 2)).toBeUndefined();
+    });
+
+    it('denormalize returns undefined for an LRU-evicted entity', () => {
+      const cache = new NormalizedCache({ maxEntities: 1 });
+      const shape1 = cache.normalize(makeUser(1, 'Alice'), 'user:1');
+      cache.normalize(makeUser(2, 'Bob'), 'user:2'); // evicts User:1
+      expect(cache.denormalize(shape1)).toBeUndefined();
+    });
+
+    it('treats Infinity as unbounded (never evicts)', () => {
+      const cache = new NormalizedCache({ maxEntities: Infinity });
+      for (let i = 0; i < 50; i++) {
+        cache.normalize(makeUser(i, `U${i}`), `user:${i}`);
+      }
+      expect(cache.size()).toBe(50);
+    });
+
+    it('falls back to the default cap for a non-positive maxEntities', () => {
+      // 0 is a meaningless cap; the cache must not evict everything.
+      const cache = new NormalizedCache({ maxEntities: 0 });
+      cache.normalize(makeUser(1, 'Alice'), 'user:1');
+      expect(cache.size()).toBe(1);
+    });
+
+    it('never evicts an entity pinned by an active query', async () => {
+      const client = new QueryClient({ normalizedCache: { maxEntities: 1 } });
+
+      const activeFn = vi.fn().mockResolvedValue(makeUser(1, 'Alice'));
+      const active = client.getQuery({
+        queryKey: 'user:1',
+        queryFn: activeFn,
+        retry: 0,
+      });
+      await active.fetch();
+      active.subscribe(() => {}); // mount -> User:1 is pinned
+
+      // A second query normalizes User:2, pushing us over the cap of 1.
+      const otherFn = vi.fn().mockResolvedValue(makeUser(2, 'Bob'));
+      const other = client.getQuery({
+        queryKey: 'user:2',
+        queryFn: otherFn,
+        retry: 0,
+      });
+      await other.fetch();
+
+      // User:1 is pinned by its active subscriber, so the (unpinned) User:2 is
+      // evicted instead even though User:1 is older.
+      expect(client.readFragment('User', 1)).toBeDefined();
+      expect(client.readFragment('User', 2)).toBeUndefined();
+    });
+
+    it('never evicts an entity with a live fragment listener', () => {
+      const cache = new NormalizedCache({ maxEntities: 1 });
+      cache.normalize(makeUser(1, 'Alice'), 'user:1');
+      cache.subscribeToEntity('User', 1, () => {}); // useFragment-style pin
+      cache.normalize(makeUser(2, 'Bob'), 'user:2'); // over cap
+
+      // User:1 is pinned by its listener; User:2 is evicted despite being newer.
+      expect(cache.readFragment('User', 1)).toBeDefined();
+      expect(cache.readFragment('User', 2)).toBeUndefined();
+    });
+
+    it('does not refetch inactive queries when their entity is evicted', async () => {
+      const client = new QueryClient({ normalizedCache: { maxEntities: 1 } });
+
+      const firstFn = vi.fn().mockResolvedValue(makeUser(1, 'Alice'));
+      const first = client.getQuery({
+        queryKey: 'user:1',
+        queryFn: firstFn,
+        retry: 0,
+      });
+      await first.fetch(); // inactive (no subscribers) after this
+
+      const secondFn = vi.fn().mockResolvedValue(makeUser(2, 'Bob'));
+      const second = client.getQuery({
+        queryKey: 'user:2',
+        queryFn: secondFn,
+        retry: 0,
+      });
+      await second.fetch(); // evicts User:1 from the shared store
+
+      // Eviction must not trigger a background refetch of the inactive query;
+      // its own state.data snapshot remains intact.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(firstFn).toHaveBeenCalledTimes(1);
+      expect(first.state.data).toEqual(makeUser(1, 'Alice'));
+    });
+  });
+
+  // ##############################
   // Backwards Compatibility
   // ##############################
 

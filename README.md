@@ -156,6 +156,31 @@ queryClient.removeQueries(['users']);
 queryClient.clear();
 ```
 
+#### Memory limits (LRU eviction)
+
+Both cache tiers are bounded by an entry-count limit and evict the
+least-recently-used entries once the limit is exceeded. Entries that a live
+view depends on are never evicted — a query with active subscribers, and an
+entity referenced by such a query or by a `useFragment` listener, are "pinned"
+and skipped, so a limit is a soft cap rather than a guarantee that data
+in-use is dropped.
+
+```typescript
+const queryClient = new QueryClient({
+  // Max cached queries (L1). Idle, subscriber-less queries are evicted LRU —
+  // an eager complement to per-query `cacheTime` GC. Default: 1000.
+  maxQueries: 1000,
+
+  normalizedCache: {
+    // Max normalized entities before LRU eviction. Default: 5000.
+    maxEntities: 5000,
+  },
+});
+```
+
+Recency is refreshed on every read and write, so hot data survives. Pass
+`Infinity` to either limit to opt out of eviction entirely.
+
 ### useQuery
 
 Fetch and cache data with automatic state management.
