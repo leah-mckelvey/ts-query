@@ -27,3 +27,10 @@ yarn-error.log*
 .DS_Store
 .idea/
 .vscode/
+
+# Python (packages/py-core)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/

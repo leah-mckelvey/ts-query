@@ -7,7 +7,7 @@ on an Express backend and drives UI state on the frontend.
 
 ## What's in Here
 
-This is a monorepo containing **7 packages** and **5 example apps** that
+This is a monorepo containing **8 packages** and **5 example apps** that
 dogfood every package:
 
 ```
@@ -18,7 +18,8 @@ packages/
 ├── ui-react/        # Design-token-driven React component library
 ├── ui-mithril/      # Design-token-driven Mithril component library
 ├── ui-native/       # React Native component library
-└── persist/         # Persistence layer (WIP)
+├── persist/         # Persistence layer (WIP)
+└── py-core/         # asyncio port of core for Python backends (proof of concept)
 
 examples/
 ├── react-demo/          # React app — data fetching + mutations + store
@@ -43,6 +44,13 @@ examples/
   stack.
 - **UI component libraries use design tokens directly**, not theme context.
   Same component API across React, Mithril, and React Native.
+- **The backend doesn't have to be Node either.** `packages/py-core` is an
+  asyncio port of the core that is wire-compatible with the TypeScript one —
+  same query-key serialization, same L2 payload encoding — so a Python service
+  and a browser `QueryClient` can share one Redis. It adds the piece a forked
+  worker pool needs and Node doesn't: request coalescing across processes, not
+  just within one event loop. See
+  [`packages/py-core/README.md`](packages/py-core/README.md).
 
 ## Installation
 
