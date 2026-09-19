@@ -31,6 +31,35 @@ describe('Mutation', () => {
     expect(mutationFn).toHaveBeenCalledWith('input');
   });
 
+  it('should not fail when mergeResult throws after a successful mutation', async () => {
+    const mutationFn = vi.fn().mockResolvedValue('result');
+    const onSuccess = vi.fn();
+    const onError = vi.fn();
+    const onSettled = vi.fn();
+    const mergeResult = vi.fn(() => {
+      throw new Error('merge failed');
+    });
+    const mutation = new Mutation(
+      {
+        mutationFn,
+        onSuccess,
+        onError,
+        onSettled,
+      },
+      mergeResult,
+    );
+
+    const result = await mutation.mutate('input');
+
+    expect(result).toBe('result');
+    expect(mergeResult).toHaveBeenCalledWith('result');
+    expect(mutation.state.status).toBe('success');
+    expect(mutation.state.data).toBe('result');
+    expect(onSuccess).toHaveBeenCalledWith('result', 'input');
+    expect(onSettled).toHaveBeenCalledWith('result', null, 'input');
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('should handle mutation errors', async () => {
     const error = new Error('Mutation error');
     const mutationFn = vi.fn().mockRejectedValue(error);

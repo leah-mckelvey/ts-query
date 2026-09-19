@@ -62,7 +62,11 @@ export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
 
     try {
       const data = await this.options.mutationFn(variables);
-      this.mergeResult?.(data);
+      try {
+        this.mergeResult?.(data);
+      } catch (error) {
+        void error;
+      }
       this.updateState({
         status: 'success',
         data,
