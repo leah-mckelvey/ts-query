@@ -123,8 +123,14 @@ export class NormalizedCache {
    * registering the mutation itself as a query. Returns every existing query
    * that references an entity touched by the result.
    */
-  mergeMutationResult(data: unknown): string[] {
-    const touchedRefs = new Set<string>();
+  mergeMutationResult(
+    data: unknown,
+    options: {
+      notifyListeners?: boolean;
+      touchedRefs?: Set<string>;
+    } = {},
+  ): string[] {
+    const { notifyListeners = true, touchedRefs = new Set<string>() } = options;
     const previousEntities = this.entities;
     const previousEntityToQueries = this.entityToQueries;
     this.entities = new Map(
@@ -150,10 +156,18 @@ export class NormalizedCache {
       for (const queryKey of this.getAffectedQueries(ref)) {
         affectedQueries.add(queryKey);
       }
-      this.notifyEntityListeners(ref);
+      if (notifyListeners) {
+        this.notifyEntityListeners(ref);
+      }
     }
 
     return Array.from(affectedQueries);
+  }
+
+  notifyEntities(refs: Iterable<string>): void {
+    for (const ref of refs) {
+      this.notifyEntityListeners(ref);
+    }
   }
 
   /**

@@ -562,6 +562,26 @@ describe('QueryClient + normalized cache', () => {
     });
   });
 
+  it('notifies fragment subscribers after dependent queries recompute', async () => {
+    const query = client.getQuery({
+      queryKey: 'user:1',
+      queryFn: vi.fn().mockResolvedValue(makeUser(1, 'Alice')),
+      retry: 0,
+    });
+    await query.fetch();
+
+    const listener = vi.fn(() => query.state.data?.name);
+    client.subscribeFragment('User', 1, listener);
+
+    await client
+      .createMutation({
+        mutationFn: vi.fn().mockResolvedValue(makeUser(1, 'Alicia')),
+      })
+      .mutate(undefined);
+
+    expect(listener).toHaveReturnedWith('Alicia');
+  });
+
   it('normalizes REST mutation results with configured identity', async () => {
     const restClient = new QueryClient({
       normalizedCache: {

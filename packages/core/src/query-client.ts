@@ -273,10 +273,15 @@ export class QueryClient {
     return new Mutation<TData, TVariables, TError>(options, (data) => {
       if (!this.normalizedCache) return;
 
-      const affectedKeys = this.normalizedCache.mergeMutationResult(data);
+      const touchedRefs = new Set<string>();
+      const affectedKeys = this.normalizedCache.mergeMutationResult(data, {
+        notifyListeners: false,
+        touchedRefs,
+      });
       this.notifyAffectedQueries(affectedKeys, (query) => {
         query.recomputeFromNormalizedCache();
       });
+      this.normalizedCache.notifyEntities(touchedRefs);
     });
   }
 
