@@ -165,6 +165,21 @@ describe('NormalizedCache', () => {
       expect(cache.readFragment('GameState', 'game-1')).toEqual(data);
       expect(cache.denormalize(shape)).toEqual(data);
     });
+
+    it('falls back to GraphQL identification when configured identity is invalid', () => {
+      const data = makeUser(1, 'Alice');
+      const { cache, shape } = setupCacheWith(data, 'user:1', {
+        identify: () =>
+          ({ typename: 'BrokenUser', id: undefined }) as unknown as {
+            typename: string;
+            id: string;
+          },
+      });
+
+      expect(cache.readFragment('User', 1)).toEqual(data);
+      expect(cache.readFragment('BrokenUser', 'undefined')).toBeUndefined();
+      expect(cache.denormalize(shape)).toEqual(data);
+    });
   });
 
   describe('mergeMutationResult', () => {

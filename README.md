@@ -190,9 +190,8 @@ Handle mutations (POST, PUT, DELETE operations).
 ```typescript
 const mutation = useMutation({
   mutationFn: (data) => createUser(data),
-  onSuccess: (data, variables) => {},
-  onError: (error, variables) => {},
-  onSettled: (data, error, variables) => {},
+  onSuccess: (data) => console.log('Created:', data),
+  onError: (error) => console.error('Create failed:', error),
 });
 
 // Trigger mutation

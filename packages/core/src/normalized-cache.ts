@@ -33,6 +33,17 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isValidEntityIdentity(
+  identity: EntityIdentity | null | undefined,
+): identity is EntityIdentity {
+  return (
+    identity !== null &&
+    identity !== undefined &&
+    typeof identity.typename === 'string' &&
+    (typeof identity.id === 'string' || typeof identity.id === 'number')
+  );
+}
+
 // #######################################
 // NORMALIZED CACHE
 // #######################################
@@ -196,7 +207,9 @@ export class NormalizedCache {
     obj: Record<string, unknown>,
   ): EntityIdentity | null {
     const configuredIdentity = this.config.identify?.(obj);
-    if (configuredIdentity != null) return configuredIdentity;
+    if (isValidEntityIdentity(configuredIdentity)) {
+      return configuredIdentity;
+    }
 
     const typename = obj.__typename;
     if (typeof typename !== 'string') return null;

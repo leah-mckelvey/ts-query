@@ -206,7 +206,9 @@ export interface NormalizedCacheConfig {
    */
   typePolicies?: Record<string, TypePolicy>;
   /**
-   * Identify entities that do not expose GraphQL's `__typename` field.
+   * Identify entities during normalization before default GraphQL
+   * identification runs. This function is called for every plain object the
+   * normalized cache encounters, so it should be fast and side-effect free.
    * When this returns no identity, the default GraphQL identification is
    * attempted; objects that neither strategy identifies remain inline.
    *
