@@ -213,6 +213,29 @@ describe('NormalizedCache', () => {
 
       expect(listener).toHaveBeenCalledTimes(1);
     });
+
+    it('does not commit partial entity updates when a mutation merge fails', () => {
+      const cache = new NormalizedCache({
+        typePolicies: {
+          Broken: {
+            merge: () => {
+              throw new Error('merge failed');
+            },
+          },
+        },
+      });
+      const shape = cache.normalize({ user: makeUser(1, 'Alice') }, 'user:1');
+
+      expect(() =>
+        cache.mergeMutationResult({
+          updatedUser: makeUser(1, 'Alicia'),
+          broken: { __typename: 'Broken', id: 1 },
+        }),
+      ).toThrow('merge failed');
+
+      expect(cache.denormalize(shape)).toEqual({ user: makeUser(1, 'Alice') });
+      expect(cache.readFragment('Broken', 1)).toBeUndefined();
+    });
   });
 
   // ##############################
