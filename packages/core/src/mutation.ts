@@ -64,8 +64,8 @@ export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
       const data = await this.options.mutationFn(variables);
       try {
         this.mergeResult?.(data);
-      } catch (error) {
-        void error;
+      } catch {
+        // Intentionally ignore cache merge errors so successful mutations still resolve successfully.
       }
       this.updateState({
         status: 'success',
