@@ -126,14 +126,22 @@ export class NormalizedCache {
   mergeMutationResult(data: unknown): string[] {
     const touchedRefs = new Set<string>();
     const previousEntities = this.entities;
+    const previousEntityToQueries = this.entityToQueries;
     this.entities = new Map(
       Array.from(previousEntities, ([ref, entity]) => [ref, { ...entity }]),
+    );
+    this.entityToQueries = new Map(
+      Array.from(previousEntityToQueries, ([ref, queryKeys]) => [
+        ref,
+        new Set(queryKeys),
+      ]),
     );
 
     try {
       this.normalizeValue(data, undefined, touchedRefs);
     } catch (error) {
       this.entities = previousEntities;
+      this.entityToQueries = previousEntityToQueries;
       throw error;
     }
 
