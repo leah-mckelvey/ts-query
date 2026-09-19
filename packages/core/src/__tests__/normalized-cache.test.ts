@@ -152,6 +152,52 @@ describe('NormalizedCache', () => {
       const { cache, shape } = setupCacheWith(data, 'misc');
       expect(cache.denormalize(shape)).toEqual(data);
     });
+
+    it('supports configurable identity for REST entities', () => {
+      const data = { gameStateId: 'game-1', score: 10 };
+      const { cache, shape } = setupCacheWith(data, 'game-state', {
+        identify: (object) =>
+          typeof object.gameStateId === 'string'
+            ? { typename: 'GameState', id: object.gameStateId }
+            : undefined,
+      });
+
+      expect(cache.readFragment('GameState', 'game-1')).toEqual(data);
+      expect(cache.denormalize(shape)).toEqual(data);
+    });
+  });
+
+  describe('mergeMutationResult', () => {
+    it('merges nested entities and returns their referencing queries', () => {
+      const cache = new NormalizedCache();
+      const post = makePost(1, 'Draft', makeUser(2, 'Alice'));
+      const shape = cache.normalize(post, 'post:1');
+
+      const affected = cache.mergeMutationResult({
+        updatePost: {
+          __typename: 'Post',
+          id: 1,
+          title: 'Published',
+          author: makeUser(2, 'Alicia'),
+        },
+      });
+
+      expect(affected).toEqual(['post:1']);
+      expect(cache.denormalize(shape)).toMatchObject({
+        title: 'Published',
+        author: { name: 'Alicia' },
+      });
+    });
+
+    it('notifies entity subscribers touched by a mutation result', () => {
+      const cache = new NormalizedCache();
+      const listener = vi.fn();
+      cache.subscribeToEntity('User', 1, listener);
+
+      cache.mergeMutationResult(makeUser(1, 'Alice'));
+
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ##############################
@@ -426,6 +472,101 @@ describe('QueryClient + normalized cache', () => {
 
     expect(q1Updates.latest.name).toBe('Evelyn');
     expect((q2Updates.latest.author as { name: string }).name).toBe('Evelyn');
+  });
+
+  // ####################
+  // Mutation result merging
+  // ####################
+
+  it('merges authoritative mutation results into referencing queries', async () => {
+    const queryFn = vi.fn().mockResolvedValue(makeUser(1, 'Alice'));
+    const query = client.getQuery({ queryKey: 'user:1', queryFn, retry: 0 });
+    await query.fetch();
+    const updates = new UpdateCollector<ReturnType<typeof makeUser>>();
+    updates.subscribe(query);
+
+    const mutation = client.createMutation({
+      mutationFn: vi.fn().mockResolvedValue(makeUser(1, 'Alicia')),
+    });
+    const result = await mutation.mutate(undefined);
+
+    expect(result.name).toBe('Alicia');
+    expect(updates.latest.name).toBe('Alicia');
+    expect(query.state.data?.name).toBe('Alicia');
+    expect(queryFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates every query that references a nested mutation entity', async () => {
+    const user = makeUser(5, 'Eve');
+    const profileQuery = client.getQuery({
+      queryKey: 'profile',
+      queryFn: vi.fn().mockResolvedValue(user),
+      retry: 0,
+    });
+    const postQuery = client.getQuery({
+      queryKey: 'post',
+      queryFn: vi.fn().mockResolvedValue(makePost(1, 'Post', user)),
+      retry: 0,
+    });
+    await Promise.all([profileQuery.fetch(), postQuery.fetch()]);
+
+    await client
+      .createMutation({
+        mutationFn: vi.fn().mockResolvedValue({
+          payload: makeUser(5, 'Evelyn'),
+        }),
+      })
+      .mutate(undefined);
+
+    expect(profileQuery.state.data).toMatchObject({ name: 'Evelyn' });
+    expect(postQuery.state.data).toMatchObject({
+      author: { name: 'Evelyn' },
+    });
+  });
+
+  it('normalizes REST mutation results with configured identity', async () => {
+    const restClient = new QueryClient({
+      normalizedCache: {
+        identify: (object) =>
+          typeof object.gameStateId === 'string'
+            ? { typename: 'GameState', id: object.gameStateId }
+            : undefined,
+      },
+    });
+    const queryFn = vi
+      .fn()
+      .mockResolvedValue({ gameStateId: 'game-1', score: 10 });
+    const query = restClient.getQuery({
+      queryKey: 'game-state',
+      queryFn,
+      retry: 0,
+    });
+    await query.fetch();
+
+    await restClient
+      .createMutation({
+        mutationFn: vi
+          .fn()
+          .mockResolvedValue({ gameStateId: 'game-1', score: 11 }),
+      })
+      .mutate(undefined);
+
+    expect(query.state.data).toEqual({ gameStateId: 'game-1', score: 11 });
+    expect(queryFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not alter cached queries when a mutation fails', async () => {
+    const { client, query } = await setupQueryWith(
+      'user:1',
+      makeUser(1, 'Alice'),
+    );
+    const mutation = client.createMutation({
+      mutationFn: vi.fn().mockRejectedValue(new Error('failed')),
+    });
+
+    await expect(mutation.mutate(undefined)).rejects.toThrow('failed');
+
+    expect(query.state.data).toEqual(makeUser(1, 'Alice'));
   });
 
   // ####################

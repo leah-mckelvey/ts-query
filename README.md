@@ -190,10 +190,7 @@ Handle mutations (POST, PUT, DELETE operations).
 ```typescript
 const mutation = useMutation({
   mutationFn: (data) => createUser(data),
-  onSuccess: (data, variables) => {
-    // Invalidate and refetch
-    queryClient.invalidateQueries(['users']);
-  },
+  onSuccess: (data, variables) => {},
   onError: (error, variables) => {},
   onSettled: (data, error, variables) => {},
 });
@@ -212,6 +209,28 @@ mutation.state.isError; // Boolean error state
 // Reset mutation state
 mutation.reset();
 ```
+
+When the client has a normalized cache, a successful mutation automatically
+merges its authoritative response into the entity store. Every active query
+that references a returned entity is recomputed and notified before
+`mutate()` resolves; no invalidation or refetch is needed. GraphQL objects are
+identified by `__typename` and `id` by default.
+
+REST DTOs can provide their entity identity through client configuration:
+
+```typescript
+const queryClient = new QueryClient({
+  normalizedCache: {
+    identify: (object) =>
+      typeof object.gameStateId === 'string'
+        ? { typename: 'GameState', id: object.gameStateId }
+        : undefined,
+  },
+});
+```
+
+Objects that cannot be identified remain inline. For non-normalized data,
+`onSuccess` can still invalidate the relevant queries explicitly.
 
 ## Running the Examples
 
