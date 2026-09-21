@@ -45,6 +45,7 @@ export type {
   SharedCacheConfig,
   NormalizedCacheConfig,
   TypePolicy,
+  EntityIdentity,
 } from './types';
 
 // ##############################

@@ -270,7 +270,19 @@ export class QueryClient {
   createMutation<TData = unknown, TVariables = unknown, TError = Error>(
     options: MutationOptions<TData, TVariables, TError>,
   ): Mutation<TData, TVariables, TError> {
-    return new Mutation<TData, TVariables, TError>(options);
+    return new Mutation<TData, TVariables, TError>(options, (data) => {
+      if (!this.normalizedCache) return;
+
+      const touchedRefs = new Set<string>();
+      const affectedKeys = this.normalizedCache.mergeMutationResult(data, {
+        notifyListeners: false,
+        touchedRefs,
+      });
+      this.notifyAffectedQueries(affectedKeys, (query) => {
+        query.recomputeFromNormalizedCache();
+      });
+      this.normalizedCache.notifyEntities(touchedRefs);
+    });
   }
 
   // ##############################

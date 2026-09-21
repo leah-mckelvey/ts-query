@@ -1,4 +1,8 @@
-import type { TypePolicy, NormalizedCacheConfig } from './types';
+import type {
+  EntityIdentity,
+  TypePolicy,
+  NormalizedCacheConfig,
+} from './types';
 
 // #######################################
 // TYPE DEFINITIONS
@@ -29,19 +33,30 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isValidEntityIdentity(
+  identity: EntityIdentity | null | undefined,
+): identity is EntityIdentity {
+  return (
+    identity !== null &&
+    identity !== undefined &&
+    typeof identity.typename === 'string' &&
+    (typeof identity.id === 'string' || typeof identity.id === 'number')
+  );
+}
+
 // #######################################
 // NORMALIZED CACHE
 // #######################################
 
 /**
- * Normalized entity store for GraphQL responses.
+ * Normalized entity store for GraphQL responses and identifiable REST DTOs.
  *
  * Entities are identified by their __typename + key field(s) and stored in a
  * flat map ("User:42" → fields). This simplified entity store focuses solely on
  * entity management, with query coordination handled by QueryClient.
  *
- * Objects that lack __typename (or whose type has no resolvable key) pass
- * through unchanged, so non-GraphQL queries are unaffected.
+ * Objects that cannot be identified by either GraphQL metadata or the
+ * configured identity function pass through unchanged.
  */
 export class NormalizedCache {
   // ##############################
@@ -101,6 +116,50 @@ export class NormalizedCache {
    */
   normalize(data: unknown, queryKey: string): unknown {
     return this.normalizeValue(data, queryKey);
+  }
+
+  /**
+   * Merge an authoritative mutation result into the entity store without
+   * registering the mutation itself as a query. Returns every existing query
+   * that references an entity touched by the result.
+   */
+  mergeMutationResult(
+    data: unknown,
+    options: {
+      notifyListeners?: boolean;
+      touchedRefs?: Set<string>;
+    } = {},
+  ): string[] {
+    const { notifyListeners = true, touchedRefs = new Set<string>() } = options;
+    const previousEntities = this.entities;
+    this.entities = new Map(
+      Array.from(previousEntities, ([ref, entity]) => [ref, { ...entity }]),
+    );
+
+    try {
+      this.normalizeValue(data, undefined, touchedRefs);
+    } catch (error) {
+      this.entities = previousEntities;
+      throw error;
+    }
+
+    const affectedQueries = new Set<string>();
+    for (const ref of touchedRefs) {
+      for (const queryKey of this.getAffectedQueries(ref)) {
+        affectedQueries.add(queryKey);
+      }
+      if (notifyListeners) {
+        this.notifyEntityListeners(ref);
+      }
+    }
+
+    return Array.from(affectedQueries);
+  }
+
+  notifyEntities(refs: Iterable<string>): void {
+    for (const ref of refs) {
+      this.notifyEntityListeners(ref);
+    }
   }
 
   /**
@@ -165,10 +224,17 @@ export class NormalizedCache {
   }
 
   /**
-   * Derive the entity ref for an object using its __typename and key field(s).
-   * Returns null if the object cannot be identified (no __typename, no key).
+   * Derive an entity identity from the configured function or from GraphQL's
+   * __typename and key field(s). Returns null when neither can identify it.
    */
-  private getEntityRef(obj: Record<string, unknown>): string | null {
+  private getEntityIdentity(
+    obj: Record<string, unknown>,
+  ): EntityIdentity | null {
+    const configuredIdentity = this.config.identify?.(obj);
+    if (isValidEntityIdentity(configuredIdentity)) {
+      return configuredIdentity;
+    }
+
     const typename = obj.__typename;
     if (typeof typename !== 'string') return null;
 
@@ -185,7 +251,7 @@ export class NormalizedCache {
     }
 
     if (keyValue == null) return null;
-    return this.makeRef(typename, keyValue as string | number);
+    return { typename, id: keyValue as string | number };
   }
 
   // ##############################
@@ -253,14 +319,20 @@ export class NormalizedCache {
   // CORE LOGIC: NORMALIZATION
   // ##############################
 
-  /** Recursively normalize a value, registering entity refs under queryKey. */
-  private normalizeValue(value: unknown, queryKey: string): unknown {
+  /** Recursively normalize a value, optionally registering refs to a query. */
+  private normalizeValue(
+    value: unknown,
+    queryKey?: string,
+    touchedRefs?: Set<string>,
+  ): unknown {
     // ####################
     // Handle arrays
     // ####################
 
     if (Array.isArray(value)) {
-      return value.map((item) => this.normalizeValue(item, queryKey));
+      return value.map((item) =>
+        this.normalizeValue(item, queryKey, touchedRefs),
+      );
     }
 
     // ####################
@@ -274,15 +346,15 @@ export class NormalizedCache {
     // ####################
 
     const normalized = this.transformObjectValues(value, (v) =>
-      this.normalizeValue(v, queryKey),
+      this.normalizeValue(v, queryKey, touchedRefs),
     );
 
     // ####################
     // Check if this object is an identifiable entity
     // ####################
 
-    const ref = this.getEntityRef(value);
-    if (ref === null) {
+    const identity = this.getEntityIdentity(value);
+    if (identity === null) {
       // Not an identifiable entity — store inline
       return normalized;
     }
@@ -291,15 +363,19 @@ export class NormalizedCache {
     // Store entity and build reverse index
     // ####################
 
+    const ref = this.makeRef(identity.typename, identity.id);
     const existing = this.entities.get(ref) ?? {};
-    const typename = value.__typename as string;
-    const merged = this.mergeEntity(typename, existing, normalized);
+    const merged = this.mergeEntity(identity.typename, existing, normalized);
     this.entities.set(ref, merged);
+    touchedRefs?.add(ref);
 
-    // Track which query references this entity
-    this.ensureSet(this.entityToQueries as Map<string, Set<unknown>>, ref).add(
-      queryKey,
-    );
+    // Mutations merge entities but must not appear in the query reverse index.
+    if (queryKey !== undefined) {
+      this.ensureSet(
+        this.entityToQueries as Map<string, Set<unknown>>,
+        ref,
+      ).add(queryKey);
+    }
 
     return { __ref: ref } satisfies EntityRef;
   }

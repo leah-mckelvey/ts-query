@@ -153,7 +153,7 @@ export interface SharedCacheConfig {
 }
 
 // ##############################
-// Normalized Cache (GraphQL)
+// Normalized Cache
 // ##############################
 
 /**
@@ -185,13 +185,19 @@ export interface TypePolicy {
   ) => Record<string, unknown>;
 }
 
+/** The type and stable identity of an object stored in the normalized cache. */
+export interface EntityIdentity {
+  typename: string;
+  id: string | number;
+}
+
 /**
  * Configuration for the in-process normalized entity cache.
  *
  * When provided to QueryClient, query results containing objects with
- * `__typename` are automatically normalized into a flat entity store.
- * Calling `writeFragment` on a type updates every query that referenced
- * that entity — no refetch required.
+ * `__typename` (or objects recognized by `identify`) are automatically
+ * normalized into a flat entity store. Fragment writes and authoritative
+ * mutation results update every query that referenced an affected entity.
  */
 export interface NormalizedCacheConfig {
   /**
@@ -199,6 +205,26 @@ export interface NormalizedCacheConfig {
    * Types not listed here use the default policy (`keyFields: 'id'`).
    */
   typePolicies?: Record<string, TypePolicy>;
+  /**
+   * Identify entities during normalization before default GraphQL
+   * identification runs. This function is called for every non-null object
+   * value (except arrays) the normalized cache encounters, so it should be
+   * fast and side-effect free.
+   * When this returns no identity, the default GraphQL identification is
+   * attempted; objects that neither strategy identifies remain inline.
+   *
+   * When omitted, objects are identified from `__typename` and the matching
+   * type policy's key fields (or `id` by default).
+   *
+   * @example
+   * identify: (object) =>
+   *   typeof object.gameStateId === 'string'
+   *     ? { typename: 'GameState', id: object.gameStateId }
+   *     : undefined
+   */
+  identify?: (
+    object: Record<string, unknown>,
+  ) => EntityIdentity | null | undefined;
 }
 
 // #######################################
@@ -211,7 +237,7 @@ export interface NormalizedCacheConfig {
 export interface QueryClientConfig {
   /** Optional shared cache (L2) configuration for multi-tier caching. */
   sharedCache?: SharedCacheConfig;
-  /** Optional normalized entity cache for GraphQL responses. */
+  /** Optional normalized entity cache for GraphQL responses and REST DTOs. */
   normalizedCache?: NormalizedCacheConfig;
 }
 

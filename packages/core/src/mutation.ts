@@ -5,6 +5,7 @@ import { deriveStatusFlags, createInitialMutationState } from './types';
 export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
   private state$: BehaviorSubject<MutationState<TData, TError>>;
   private options: MutationOptions<TData, TVariables, TError>;
+  private mergeResult?: (data: TData) => void;
 
   get state(): MutationState<TData, TError> {
     return this.state$.value;
@@ -14,8 +15,12 @@ export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
     return this.state$.asObservable();
   }
 
-  constructor(options: MutationOptions<TData, TVariables, TError>) {
+  constructor(
+    options: MutationOptions<TData, TVariables, TError>,
+    mergeResult?: (data: TData) => void,
+  ) {
     this.options = options;
+    this.mergeResult = mergeResult;
 
     // Initialize BehaviorSubject with default state
     this.state$ = new BehaviorSubject<MutationState<TData, TError>>(
@@ -57,6 +62,11 @@ export class Mutation<TData = unknown, TVariables = unknown, TError = Error> {
 
     try {
       const data = await this.options.mutationFn(variables);
+      try {
+        this.mergeResult?.(data);
+      } catch {
+        // Intentionally ignore cache merge errors so successful mutations still resolve successfully.
+      }
       this.updateState({
         status: 'success',
         data,
