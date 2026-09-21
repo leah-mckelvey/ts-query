@@ -235,6 +235,9 @@ describe('NormalizedCache', () => {
 
       expect(cache.denormalize(shape)).toEqual({ user: makeUser(1, 'Alice') });
       expect(cache.readFragment('Broken', 1)).toBeUndefined();
+      expect(cache.writeFragment('User', 1, { name: 'Alicia' })).toEqual([
+        'user:1',
+      ]);
     });
   });
 
